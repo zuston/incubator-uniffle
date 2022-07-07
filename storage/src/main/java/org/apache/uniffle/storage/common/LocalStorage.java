@@ -78,7 +78,7 @@ public class LocalStorage extends AbstractStorage {
     long freeSpace = baseFolder.getFreeSpace();
     if (freeSpace < capacity) {
       throw new IllegalArgumentException("Disk Available Capacity " + freeSpace
-          + " is smaller than configuration");
+          + " is smaller than the configured capacity: " + capacity);
     }
   }
 

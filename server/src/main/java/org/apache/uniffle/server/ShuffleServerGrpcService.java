@@ -172,6 +172,7 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
             // remove require bufferId, the memory should be updated already
             shuffleServer
                 .getShuffleTaskManager().removeRequireBufferId(requireBufferId);
+            // 将写成功的 block id 写入相应的结构存储
             shuffleServer.getShuffleTaskManager().updateCachedBlockIds(
                 appId, shuffleId, spd.getBlockList());
           }
@@ -274,6 +275,7 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
     if (requireBufferId == -1) {
       status = StatusCode.NO_BUFFER;
       ShuffleServerMetrics.counterTotalRequireBufferFailed.inc();
+      //todo: 记录日志. 还需要增加 require buffle 失败的指标项，和当前容量刷写磁盘的监控
     }
     RequireBufferResponse response =
         RequireBufferResponse

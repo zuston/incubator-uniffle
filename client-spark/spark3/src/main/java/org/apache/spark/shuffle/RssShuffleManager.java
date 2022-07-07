@@ -415,6 +415,8 @@ public class RssShuffleManager implements ShuffleManager {
     Map<Integer, Roaring64NavigableMap> partitionToExpectBlocks = new HashMap<>();
     for (int partition = startPartition; partition < endPartition; partition++) {
       long start = System.currentTimeMillis();
+      // todo: 有待优化，可以将很多 partition 存储为相同的 server 的请求聚合到一起
+      // 这边是在获取在 server 上针对单个 partition 存储的 block 数据
       Roaring64NavigableMap blockIdBitmap = shuffleWriteClient.getShuffleResult(
           clientType, Sets.newHashSet(partitionToServers.get(partition)),
           rssShuffleHandle.getAppId(), shuffleId, partition);

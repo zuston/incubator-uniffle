@@ -55,6 +55,7 @@ public class LocalStorageManager extends SingleStorageManager {
     if (StringUtils.isEmpty(storageBasePathStr)) {
       throw new IllegalArgumentException("Base path dirs must not be empty");
     }
+    // todo: 使用 aslist 方法
     storageBasePaths = storageBasePathStr.split(",");
     long shuffleExpiredTimeoutMs = conf.get(ShuffleServerConf.SHUFFLE_EXPIRED_TIMEOUT_MS);
     long capacity = conf.getSizeAsBytes(ShuffleServerConf.DISK_CAPACITY);
@@ -82,10 +83,24 @@ public class LocalStorageManager extends SingleStorageManager {
         event.getAppId(),
         event.getShuffleId(),
         event.getStartPartition()));
+    /**
+     * todo: 可能的 bug
+     * 思路点：当前存在此文件，但是盘无法写入，直接抛出异常？为什么不 fallback 到另外一块盘呢？
+     *
+     * 疑问点：
+     * 这个写入的句柄能否一直持有？是否会被持久化？
+     * 举个例子：
+     * 场景1： 现有 a,b,c 三个路径，如果在第一次写入的时候，按照 hash 选择的是 a 路径，等到后续写入的时候，发现a 坏了，则直接抛出异常（逻辑正确）
+     *
+     * 场景2： 现有 a,b,c 三个路径，如果在第一次写入的时候，按照 hash 选择的是 a 路径，但是路径 a 损坏，则 repair 之后，选择了 b 盘。
+     * 那在下一次写入的时候，a 盘恢复了，则会选择 a 路径，就导致写入数据路径错误。
+     *
+     */
     if (storage.containsWriteHandler(event.getAppId(), event.getShuffleId(), event.getStartPartition())
         && storage.isCorrupted()) {
       throw new RuntimeException("storage " + storage.getBasePath() + " is corrupted");
     }
+    // todo:
     if (storage.isCorrupted()) {
       storage = getRepairedStorage(event.getAppId(), event.getShuffleId(), event.getStartPartition());
     }

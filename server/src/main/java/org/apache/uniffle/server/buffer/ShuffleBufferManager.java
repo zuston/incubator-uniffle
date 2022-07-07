@@ -104,6 +104,9 @@ public class ShuffleBufferManager {
     Entry<Range<Integer>, ShuffleBuffer> entry = getShuffleBufferEntry(
         appId, shuffleId, spd.getPartitionId());
     if (entry == null) {
+      // todo: 日志提升
+      LOG.warn("Got unexpect data, the shuffle id dont register to server. app id: {}, shuffle id: {}",
+              appId, shuffleId);
       return StatusCode.NO_REGISTER;
     }
 
@@ -126,6 +129,7 @@ public class ShuffleBufferManager {
 
   protected Entry<Range<Integer>, ShuffleBuffer> getShuffleBufferEntry(
       String appId, int shuffleId, int partitionId) {
+    // appId -> shuffleId -> partitionId -> ShuffleBuffer to avoid too many appId
     Map<Integer, RangeMap<Integer, ShuffleBuffer>> shuffleIdToBuffers = bufferPool.get(appId);
     if (shuffleIdToBuffers == null) {
       return null;
@@ -288,7 +292,7 @@ public class ShuffleBufferManager {
     }
   }
 
-  // flush the buffer with required map which is <appId -> shuffleId>
+  // flush the buffer with required map which is <appId -> shuffleIds>
   public synchronized void flush(Map<String, Set<Integer>> requiredFlush) {
     for (Map.Entry<String, Map<Integer, RangeMap<Integer,
         ShuffleBuffer>>> appIdToBuffers : bufferPool.entrySet()) {
@@ -407,6 +411,7 @@ public class ShuffleBufferManager {
       long size = entry.getValue().get();
       pickedFlushSize += size;
       String appIdShuffleIdKey = entry.getKey();
+      // todo: 使用 split 不友好
       addPickedShuffle(appIdShuffleIdKey, pickedShuffle);
       // print detail picked info
       if (printIndex < printMax) {

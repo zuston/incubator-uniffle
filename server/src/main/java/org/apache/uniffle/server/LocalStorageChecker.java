@@ -180,6 +180,7 @@ public class LocalStorageChecker extends Checker {
             } while (readBytes != -1);
         }
       } catch (Exception e) {
+        // todo: 日志提升
         LOG.error("Storage read and write error ", e);
         return false;
       } finally {

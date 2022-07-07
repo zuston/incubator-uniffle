@@ -124,7 +124,9 @@ public class CoordinatorGrpcService extends CoordinatorServerGrpc.CoordinatorSer
       responseObserver.onNext(response);
     } catch (Exception e) {
       LOG.error(e.getMessage());
-      response = GetShuffleAssignmentsResponse.newBuilder().setStatus(StatusCode.INTERNAL_ERROR).build();
+      // todo: 设置错误的日志。方便 client 侧排查问题
+      response = GetShuffleAssignmentsResponse.newBuilder()
+              .setStatus(StatusCode.INTERNAL_ERROR).build();
       responseObserver.onNext(response);
     } finally {
       responseObserver.onCompleted();

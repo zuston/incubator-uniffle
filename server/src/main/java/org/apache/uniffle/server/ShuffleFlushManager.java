@@ -43,6 +43,9 @@ import org.apache.uniffle.storage.common.Storage;
 import org.apache.uniffle.storage.handler.api.ShuffleWriteHandler;
 import org.apache.uniffle.storage.request.CreateShuffleWriteHandlerRequest;
 
+/**
+ * 用来将内存中的数据持久化
+ */
 public class ShuffleFlushManager {
 
   private static final Logger LOG = LoggerFactory.getLogger(ShuffleFlushManager.class);
@@ -55,6 +58,7 @@ public class ShuffleFlushManager {
   private final String storageType;
   private final int storageDataReplica;
   private final ShuffleServerConf shuffleServerConf;
+  // todo: 不支持在外部直接传入 Hadoop 配置文件，默认从 classpath 中读取，如果有非本集群的 conf 会比较难配置
   private Configuration hadoopConf;
   // appId -> shuffleId -> partitionId -> handlers
   private Map<String, Map<Integer, RangeMap<Integer, ShuffleWriteHandler>>> handlers = Maps.newConcurrentMap();
@@ -112,6 +116,7 @@ public class ShuffleFlushManager {
     processEventThread.setDaemon(true);
     processEventThread.start();
     // todo: extract a class named Service, and support stop method
+    // 用于某些磁盘有问题时候，将需要写入的 event 放到另外一个 pending 队列
     Thread thread = new Thread("PendingEventProcessThread") {
       @Override
       public void run() {
@@ -150,6 +155,7 @@ public class ShuffleFlushManager {
     boolean writeSuccess = false;
     try {
       // storage info maybe null if the application cache was cleared already
+      // todo: 优化 if else 结构，看起来太复杂了
       if (storage != null) {
         if (blocks == null || blocks.isEmpty()) {
           LOG.info("There is no block to be flushed: " + event);
@@ -182,7 +188,7 @@ public class ShuffleFlushManager {
               writeSuccess = true;
               break;
             }
-
+            // todo: storage 可能会被 storageManager.write 变更，此时是否有问题？
             writeSuccess = storageManager.write(storage, handler, event);
 
             if (writeSuccess) {
@@ -281,16 +287,21 @@ public class ShuffleFlushManager {
   @VisibleForTesting
   void processPendingEvents() throws Exception {
     PendingShuffleFlushEvent event = pendingEvents.take();
-    Storage storage = storageManager.selectStorage(event.getEvent());
-    if (storage == null) {
-      dropPendingEvent(event);
-      LOG.error("Flush event cannot be flushed because of application related was cleared, {}", event.getEvent());
+    // todo: 判断 pending event 的 app 是否被清理掉了。直接可以丢弃
+    if (event.getEvent().isValid()) {
       return;
     }
     if (System.currentTimeMillis() - event.getCreateTimeStamp() > pendingEventTimeoutSec * 1000L) {
       dropPendingEvent(event);
       LOG.error("Flush event cannot be flushed for {} sec, the event {} is dropped",
           pendingEventTimeoutSec, event.getEvent());
+      return;
+    }
+    // todo: 优化下判断顺序
+    Storage storage = storageManager.selectStorage(event.getEvent());
+    if (storage == null) {
+      dropPendingEvent(event);
+      LOG.error("Flush event cannot be flushed because of application related was cleared, {}", event.getEvent());
       return;
     }
     // storage maybe null if the application cache was cleared already

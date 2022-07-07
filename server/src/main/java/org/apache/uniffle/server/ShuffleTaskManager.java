@@ -114,6 +114,7 @@ public class ShuffleTaskManager {
       while (true) {
         try {
           String appId = expiredAppIdQueue.take();
+          // todo: recheck the expired
           removeResources(appId);
         } catch (Exception e) {
           LOG.error("Exception happened when clear resource for expired application", e);
@@ -242,6 +243,7 @@ public class ShuffleTaskManager {
       return;
     }
     cachedBlockIds.putIfAbsent(appId, Maps.newConcurrentMap());
+    // 存储进 block id 的 bitmap 中，用于校验是否 block id 在此 server 上
     Map<Integer, Roaring64NavigableMap> shuffleToBlockIds = cachedBlockIds.get(appId);
     shuffleToBlockIds.putIfAbsent(shuffleId, Roaring64NavigableMap.bitmapOf());
     Roaring64NavigableMap bitmap = shuffleToBlockIds.get(shuffleId);

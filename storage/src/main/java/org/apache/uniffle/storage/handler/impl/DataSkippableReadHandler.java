@@ -59,6 +59,7 @@ public abstract class DataSkippableReadHandler extends AbstractClientReadHandler
 
   public ShuffleDataResult readShuffleData() {
     if (shuffleDataSegments.isEmpty()) {
+      // 先读 index 文件，看看要读哪些 block 的数据
       ShuffleIndexResult shuffleIndexResult = readShuffleIndex();
       if (shuffleIndexResult == null || shuffleIndexResult.isEmpty()) {
         return null;

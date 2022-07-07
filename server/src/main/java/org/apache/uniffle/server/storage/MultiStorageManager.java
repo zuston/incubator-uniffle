@@ -90,6 +90,7 @@ public class MultiStorageManager implements StorageManager {
 
   @Override
   public boolean write(Storage storage, ShuffleWriteHandler handler, ShuffleDataFlushEvent event) {
+    // 使用具体的那个存储 manager
     StorageManager storageManager = selectStorageManager(event);
     if (storageManager == coldStorageManager && event.getRetryTimes() > fallBackTimes) {
       try {
@@ -97,6 +98,7 @@ public class MultiStorageManager implements StorageManager {
             event.getAppId(),
             event.getShuffleId(),
             event.getStartPartition());
+        // todo: request == null 意味着什么?
         if (request == null) {
           return false;
         }
@@ -106,6 +108,7 @@ public class MultiStorageManager implements StorageManager {
         LOG.warn("Create fallback write handler failed ", ioe);
         return false;
       }
+      // todo: 顺序上移，逻辑有点怪
       return warmStorageManager.write(storage, handler, event);
     } else {
       return storageManager.write(storage, handler, event);

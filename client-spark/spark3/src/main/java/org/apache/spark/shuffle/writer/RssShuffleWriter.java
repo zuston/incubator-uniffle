@@ -234,6 +234,7 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
       if (blockIds.isEmpty()) {
         break;
       }
+      // todo: 加上哪个 task 在等待发送。隔10s 输出一次，避免日志过多
       LOG.info("Wait " + blockIds.size() + " blocks sent to shuffle server");
       Uninterruptibles.sleepUninterruptibly(sendCheckInterval, TimeUnit.MILLISECONDS);
       if (System.currentTimeMillis() - start > sendCheckTimeout) {

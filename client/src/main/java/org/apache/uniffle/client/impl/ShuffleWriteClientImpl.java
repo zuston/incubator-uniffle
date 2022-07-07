@@ -124,6 +124,7 @@ public class ShuffleWriteClientImpl implements ShuffleWriteClient {
                   appId, retryMax, retryIntervalMax, shuffleIdToBlocks);
           long s = System.currentTimeMillis();
           RssSendShuffleDataResponse response = getShuffleServerClient(ssi).sendShuffleData(request);
+          // todo: 加上 ms
           LOG.info("ShuffleWriteClientImpl sendShuffleData cost:" + (System.currentTimeMillis() - s));
 
           if (response.getStatusCode() == ResponseStatusCode.SUCCESS) {
@@ -133,6 +134,7 @@ public class ShuffleWriteClientImpl implements ShuffleWriteClient {
                     + " blocks to [" + ssi.getId() + "] successfully");
           } else {
             isAllServersSuccess.set(false);
+            // 加上 shuffle id + task id
             LOG.warn("Send: " + serverToBlockIds.get(ssi).size() + " blocks to [" + ssi.getId()
                     + "] failed with statusCode[" + response.getStatusCode() + "], ");
           }
@@ -447,11 +449,13 @@ public class ShuffleWriteClientImpl implements ShuffleWriteClient {
           }
         }
       } catch (Exception e) {
+        // todo: 加上错误日志信息
         LOG.warn("Get shuffle result is failed from " + ssi
-            + " for appId[" + appId + "], shuffleId[" + shuffleId + "]");
+            + " for appId[" + appId + "], shuffleId[" + shuffleId + "]", e);
       }
     }
     if (!isSuccessful) {
+      // todo: 加上 partition 信息，跟哪一台 server 交互错误
       throw new RssException("Get shuffle result is failed for appId["
           + appId + "], shuffleId[" + shuffleId + "]");
     }
