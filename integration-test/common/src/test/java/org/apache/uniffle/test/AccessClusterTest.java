@@ -169,5 +169,14 @@ public class AccessClusterTest extends CoordinatorTestBase {
     shuffleServer.stopServer();
     shutdownServers();
   }
+  
+  @Test
+  public void test1() throws Exception {
+    check(null);
+  }
+  
+  public void check(String user) {
+    user.contains("user");
+  }
 }
 
