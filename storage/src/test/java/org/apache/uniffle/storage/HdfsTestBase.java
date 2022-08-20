@@ -24,9 +24,7 @@ import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -40,21 +38,27 @@ public class HdfsTestBase implements Serializable {
   protected static MiniDFSCluster cluster;
   protected static File baseDir;
 
+  private static volatile MiniHdfsCluster miniHdfsCluster;
+
   @BeforeAll
   public static void setUpHdfs(@TempDir File tempDir) throws Exception {
-    conf = new Configuration();
-    baseDir = tempDir;
-    conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR,
-        baseDir.getAbsolutePath());
-    cluster = (new MiniDFSCluster.Builder(conf)).build();
-    HDFS_URI = "hdfs://localhost:" + cluster.getNameNodePort() + "/";
-    fs = (new Path(HDFS_URI)).getFileSystem(conf);
+    if (conf == null) {
+      synchronized (HdfsTestBase.class) {
+        if (conf == null) {
+          MiniHdfsCluster.setUpHdfs(tempDir);
+          conf = MiniHdfsCluster.conf;
+          baseDir = MiniHdfsCluster.baseDir;
+          cluster = MiniHdfsCluster.cluster;
+          HDFS_URI = MiniHdfsCluster.HDFS_URI;
+          fs = MiniHdfsCluster.fs;
+        }
+      }
+    }
   }
 
-  @AfterAll
   public static void tearDownHdfs() throws Exception {
     fs.close();
-    cluster.shutdown();
+    MiniHdfsCluster.cluster.shutdown();
   }
 
   protected void compareBytes(List<byte[]> expected, List<ByteBuffer> actual) {
