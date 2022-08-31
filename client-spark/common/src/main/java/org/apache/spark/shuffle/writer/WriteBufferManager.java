@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.clearspring.analytics.util.Lists;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Maps;
+import org.apache.spark.SparkEnv;
 import org.apache.spark.executor.ShuffleWriteMetrics;
 import org.apache.spark.memory.MemoryConsumer;
 import org.apache.spark.memory.MemoryMode;
@@ -32,14 +33,16 @@ import org.apache.spark.memory.TaskMemoryManager;
 import org.apache.spark.serializer.SerializationStream;
 import org.apache.spark.serializer.Serializer;
 import org.apache.spark.serializer.SerializerInstance;
+import org.apache.spark.shuffle.RssSparkClientConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.reflect.ClassTag$;
 
 import org.apache.uniffle.client.util.ClientUtils;
-import org.apache.uniffle.common.RssShuffleUtils;
 import org.apache.uniffle.common.ShuffleBlockInfo;
 import org.apache.uniffle.common.ShuffleServerInfo;
+import org.apache.uniffle.common.compression.CompressionFactory;
+import org.apache.uniffle.common.compression.Compressor;
 import org.apache.uniffle.common.exception.RssException;
 import org.apache.uniffle.common.util.ChecksumUtils;
 
@@ -77,6 +80,7 @@ public class WriteBufferManager extends MemoryConsumer {
   private long uncompressedDataLen = 0;
   private long requireMemoryInterval;
   private int requireMemoryRetryMax;
+  private Compressor compressor;
 
   public WriteBufferManager(
       int shuffleId,
@@ -102,6 +106,7 @@ public class WriteBufferManager extends MemoryConsumer {
     this.requireMemoryRetryMax = bufferManagerOptions.getRequireMemoryRetryMax();
     this.arrayOutputStream = new WrappedByteArrayOutputStream(serializerBufferSize);
     this.serializeStream = instance.serializeStream(arrayOutputStream);
+    this.compressor = CompressionFactory.get().getCompressor(RssSparkClientConf.from(SparkEnv.get().conf()));
   }
 
   public List<ShuffleBlockInfo> addRecord(int partitionId, Object key, Object value) {
@@ -170,7 +175,7 @@ public class WriteBufferManager extends MemoryConsumer {
     byte[] data = wb.getData();
     final int uncompressLength = data.length;
     long start = System.currentTimeMillis();
-    final byte[] compressed = RssShuffleUtils.compressData(data);
+    final byte[] compressed = compressor.compress(data);
     final long crc32 = ChecksumUtils.getCrc32(compressed);
     compressTime += System.currentTimeMillis() - start;
     final long blockId = ClientUtils.getBlockId(partitionId, taskAttemptId, getNextSeqNo(partitionId));

@@ -18,12 +18,41 @@
 package org.apache.uniffle.common.config;
 
 import org.junit.jupiter.api.Test;
+import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RssConfTest {
+
+  @Test
+  public void testA() {
+    Roaring64NavigableMap map1 = new Roaring64NavigableMap();
+    map1.addLong(1L);
+    map1.addLong(2L);
+
+    Roaring64NavigableMap map2 = new Roaring64NavigableMap();
+    map2.addLong(2L);
+    map2.addLong(3L);
+
+    map1.and(map2);
+    System.out.println(map1.toString());
+
+
+    Roaring64NavigableMap map3 = new Roaring64NavigableMap();
+    map3.addLong(1L);
+    map3.addLong(2L);
+
+    Roaring64NavigableMap map4 = new Roaring64NavigableMap();
+    map4.addLong(2L);
+    map4.addLong(3L);
+
+    map3.or(map4);
+    map3.xor(map4);
+    System.out.println(map3.toString());
+
+  }
 
   @Test
   public void testOptionWithDefault() {

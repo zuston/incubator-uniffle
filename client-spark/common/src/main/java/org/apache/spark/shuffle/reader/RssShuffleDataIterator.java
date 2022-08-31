@@ -24,10 +24,12 @@ import com.esotericsoftware.kryo.io.Input;
 import com.google.common.annotations.VisibleForTesting;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
+import org.apache.spark.SparkEnv;
 import org.apache.spark.executor.ShuffleReadMetrics;
 import org.apache.spark.serializer.DeserializationStream;
 import org.apache.spark.serializer.Serializer;
 import org.apache.spark.serializer.SerializerInstance;
+import org.apache.spark.shuffle.RssSparkClientConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Product2;
@@ -39,6 +41,8 @@ import scala.runtime.BoxedUnit;
 import org.apache.uniffle.client.api.ShuffleReadClient;
 import org.apache.uniffle.client.response.CompressedShuffleBlock;
 import org.apache.uniffle.common.RssShuffleUtils;
+import org.apache.uniffle.common.compression.CompressionFactory;
+import org.apache.uniffle.common.compression.Decompressor;
 import org.apache.uniffle.common.exception.RssException;
 
 public class RssShuffleDataIterator<K, C> extends AbstractIterator<Product2<K, C>> {
@@ -57,6 +61,7 @@ public class RssShuffleDataIterator<K, C> extends AbstractIterator<Product2<K, C
   private ByteBufInputStream byteBufInputStream = null;
   private long unCompressionLength = 0;
   private ByteBuffer uncompressedData;
+  private Decompressor decompressor;
 
   public RssShuffleDataIterator(
       Serializer serializer,
@@ -65,6 +70,8 @@ public class RssShuffleDataIterator<K, C> extends AbstractIterator<Product2<K, C
     this.serializerInstance = serializer.newInstance();
     this.shuffleReadClient = shuffleReadClient;
     this.shuffleReadMetrics = shuffleReadMetrics;
+    this.decompressor = CompressionFactory.get()
+        .getDecompressor(RssSparkClientConf.from(SparkEnv.get().conf()));
   }
 
   public Iterator<Tuple2<Object, Object>> createKVIterator(ByteBuffer data) {
@@ -119,7 +126,7 @@ public class RssShuffleDataIterator<K, C> extends AbstractIterator<Product2<K, C
           }
         }
         long startDecompress = System.currentTimeMillis();
-        uncompressedData = RssShuffleUtils.decompressData(
+        uncompressedData = decompressor.decompress(
             compressedData, compressedBlock.getUncompressLength());
         unCompressionLength += compressedBlock.getUncompressLength();
         long decompressDuration = System.currentTimeMillis() - startDecompress;

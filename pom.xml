@@ -77,6 +77,7 @@
     <system-rules.version>1.19.0</system-rules.version>
     <test.redirectToFile>true</test.redirectToFile>
     <trimStackTrace>false</trimStackTrace>
+    <zstd-jni.version>1.5.2-3</zstd-jni.version>
   </properties>
 
   <repositories>
@@ -599,6 +600,12 @@
         <groupId>org.mockito</groupId>
         <artifactId>mockito-core</artifactId>
         <version>${mockito.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>com.github.luben</groupId>
+        <artifactId>zstd-jni</artifactId>
+        <version>${zstd-jni.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
