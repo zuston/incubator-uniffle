@@ -302,9 +302,15 @@ public class RssShuffleManager implements ShuffleManager {
       BufferManagerOptions bufferOptions = new BufferManagerOptions(sparkConf);
       ShuffleWriteMetrics writeMetrics = context.taskMetrics().shuffleWriteMetrics();
       WriteBufferManager bufferManager = new WriteBufferManager(
-          shuffleId, context.taskAttemptId(), bufferOptions, rssHandle.getDependency().serializer(),
-          rssHandle.getPartitionToServers(), context.taskMemoryManager(),
-          writeMetrics);
+          shuffleId,
+          context.taskAttemptId(),
+          bufferOptions,
+          rssHandle.getDependency().serializer(),
+          rssHandle.getPartitionToServers(),
+          context.taskMemoryManager(),
+          writeMetrics,
+          RssSparkConfig.toRssConf(sparkConf)
+      );
       taskToBufferManager.put(taskId, bufferManager);
 
       return new RssShuffleWriter(rssHandle.getAppId(), shuffleId, taskId, context.taskAttemptId(), bufferManager,
@@ -357,7 +363,7 @@ public class RssShuffleManager implements ShuffleManager {
           rssShuffleHandle, shuffleRemoteStoragePath, indexReadLimit,
           readerHadoopConf,
           storageType, (int) readBufferSize, partitionNumPerRange, partitionNum,
-          blockIdBitmap, taskIdBitmap);
+          blockIdBitmap, taskIdBitmap, RssSparkConfig.toRssConf(sparkConf));
     } else {
       throw new RuntimeException("Unexpected ShuffleHandle:" + handle.getClass().getName());
     }
