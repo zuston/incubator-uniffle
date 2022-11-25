@@ -355,9 +355,10 @@ public class ShuffleTaskManager {
   }
 
   public ShuffleDataResult getInMemoryShuffleData(
-      String appId, Integer shuffleId, Integer partitionId, long blockId, int readBufferSize) {
+      String appId, Integer shuffleId, Integer partitionId, long blockId, int readBufferSize,
+      Roaring64NavigableMap expectedTaskIds) {
     return shuffleBufferManager.getShuffleData(appId,
-        shuffleId, partitionId, blockId, readBufferSize);
+        shuffleId, partitionId, blockId, readBufferSize, expectedTaskIds);
   }
 
   public ShuffleDataResult getShuffleData(

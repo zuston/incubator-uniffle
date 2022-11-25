@@ -109,7 +109,10 @@ public class ShuffleHandlerFactory {
         request.getShuffleId(),
         request.getPartitionId(),
         request.getReadBufferSize(),
-        shuffleServerClients);
+        shuffleServerClients,
+        request.getExpectTaskIds(),
+        request.isExpectedTaskIdsBitmapFilterEnable()
+    );
     return memoryClientReadHandler;
   }
 
