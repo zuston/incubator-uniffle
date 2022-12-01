@@ -139,6 +139,9 @@ public class LocalStorageManager extends SingleStorageManager {
 
   @Override
   public Storage selectStorage(ShuffleDataFlushEvent event) {
+    if (event.getUnderStorage() != null) {
+      return event.getUnderStorage();
+    }
     LocalStorage storage = localStorages.get(ShuffleStorageUtils.getStorageIndex(
         localStorages.size(),
         event.getAppId(),
@@ -151,6 +154,7 @@ public class LocalStorageManager extends SingleStorageManager {
     if (storage.isCorrupted()) {
       storage = getRepairedStorage(event.getAppId(), event.getShuffleId(), event.getStartPartition());
     }
+    event.setUnderStorage(storage);
     return storage;
   }
 

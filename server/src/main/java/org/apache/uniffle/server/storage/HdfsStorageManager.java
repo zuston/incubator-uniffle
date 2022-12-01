@@ -70,7 +70,12 @@ public class HdfsStorageManager extends SingleStorageManager {
 
   @Override
   public Storage selectStorage(ShuffleDataFlushEvent event) {
-    return getStorageByAppId(event.getAppId());
+    if (event.getUnderStorage() != null) {
+      return event.getUnderStorage();
+    }
+    Storage storage = getStorageByAppId(event.getAppId());
+    event.setUnderStorage(storage);
+    return storage;
   }
 
   @Override
