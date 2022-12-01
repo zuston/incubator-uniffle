@@ -21,6 +21,7 @@ import java.util.Map;
 
 import com.google.common.collect.Maps;
 
+import org.apache.uniffle.client.api.CoordinatorClient;
 import org.apache.uniffle.client.api.ShuffleServerClient;
 import org.apache.uniffle.client.impl.grpc.ShuffleServerGrpcClient;
 import org.apache.uniffle.common.ClientType;
@@ -58,5 +59,11 @@ public class ShuffleServerClientFactory {
       serverToClients.put(shuffleServerInfo, createShuffleServerClient(clientType, shuffleServerInfo));
     }
     return serverToClients.get(shuffleServerInfo);
+  }
+
+  // Only for tests
+  public synchronized void cleanupCache() {
+    clients.values().stream().flatMap(x -> x.values().stream()).forEach(ShuffleServerClient::close);
+    this.clients = Maps.newConcurrentMap();
   }
 }
