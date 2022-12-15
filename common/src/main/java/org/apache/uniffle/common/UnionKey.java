@@ -15,35 +15,31 @@
  * limitations under the License.
  */
 
-package org.apache.uniffle.server;
+package org.apache.uniffle.common;
 
-public class ShuffleDataReadEvent {
+import org.apache.commons.lang3.StringUtils;
 
-  private String appId;
-  private int shuffleId;
-  private int partitionId;
-  private int startPartition;
+/**
+ * This class is to wrap multi elements to be as union key.
+ */
+public class UnionKey {
+  private static final String SPLIT_KEY = "_";
 
-  public ShuffleDataReadEvent(String appId, int shuffleId, int partitionId, int[] range) {
-    this.appId = appId;
-    this.shuffleId = shuffleId;
-    this.partitionId = partitionId;
-    this.startPartition = range[0];
+  public static String toKey(Object... factors) {
+    return StringUtils.join(factors, SPLIT_KEY);
   }
 
-  public String getAppId() {
-    return appId;
+  public static boolean startsWith(String key, Object... factors) {
+    if (key == null) {
+      return false;
+    }
+    return key.startsWith(toKey(factors));
   }
 
-  public int getShuffleId() {
-    return shuffleId;
-  }
-
-  public int getPartitionId() {
-    return partitionId;
-  }
-
-  public int getStartPartition() {
-    return startPartition;
+  public static boolean sameWith(String key, Object... factors) {
+    if (key == null) {
+      return false;
+    }
+    return key.equals(toKey(factors));
   }
 }
