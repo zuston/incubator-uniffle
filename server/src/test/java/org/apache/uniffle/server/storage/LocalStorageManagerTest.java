@@ -35,9 +35,11 @@ import org.apache.uniffle.storage.common.LocalStorage;
 import org.apache.uniffle.storage.common.Storage;
 import org.apache.uniffle.storage.util.StorageType;
 
+import static org.apache.uniffle.server.ShuffleServerConf.RSS_LOCAL_STORAGE_MULTIPLE_DISK_SELECTION_ENABLE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
@@ -72,6 +74,59 @@ public class LocalStorageManagerTest {
   }
 
   @Test
+  public void testDynamicStorageSelection() {
+    String[] storagePaths = {
+        "/tmp/rss-data1",
+        "/tmp/rss-data2",
+        "/tmp/rss-data3"
+    };
+
+    ShuffleServerConf conf = new ShuffleServerConf();
+    conf.set(RSS_LOCAL_STORAGE_MULTIPLE_DISK_SELECTION_ENABLE, true);
+    conf.set(ShuffleServerConf.RSS_STORAGE_BASE_PATH, Arrays.asList(storagePaths));
+    conf.setLong(ShuffleServerConf.DISK_CAPACITY, 1024L);
+    conf.setString(ShuffleServerConf.RSS_STORAGE_TYPE, StorageType.LOCALFILE.name());
+
+    LocalStorageManager localStorageManager = new LocalStorageManager(conf);
+
+    String appId = "testDynamicStorageSelection";
+    ShuffleDataFlushEvent dataFlushEvent = toDataFlushEvent(appId, 1, 1);
+
+    /**
+     * case1: normal selection
+      */
+    Storage storage1 = localStorageManager.selectStorage(dataFlushEvent);
+    Storage storage2 = localStorageManager.selectStorage(dataFlushEvent);
+    assertEquals(storage1, storage2);
+
+    /**
+     * case2: when one storage can't write, it will choose another storage
+      */
+    // mark its storage full
+    ((LocalStorage)storage1).getMetaData().setSize(1024);
+    Storage storage3 = localStorageManager.selectStorage(dataFlushEvent);
+    assertNotEquals(storage1, storage3);
+
+    /**
+     * case3: when all storages can't write, it will directly throw exception to make event fail.
+     */
+    ((LocalStorage)storage3).getMetaData().setSize(1024);
+    Storage storage4 = localStorageManager.selectStorage(dataFlushEvent);
+    assertNotEquals(storage1, storage4);
+    assertNotEquals(storage3, storage4);
+    // This data flush event's view has 3 local storages.
+    localStorageManager.getStorages().stream().forEach(localStorage -> {
+      localStorage.getMetaData().setSize(1024);
+    });
+    try {
+      Storage storage5 = localStorageManager.selectStorage(dataFlushEvent);
+      fail();
+    } catch (Exception e) {
+      // ignore
+    }
+  }
+
+  @Test
   public void testStorageSelectionWhenReachingHighWatermark() {
     String[] storagePaths = {
         "/tmp/rss-data1",
@@ -80,6 +135,7 @@ public class LocalStorageManagerTest {
     };
 
     ShuffleServerConf conf = new ShuffleServerConf();
+    conf.set(RSS_LOCAL_STORAGE_MULTIPLE_DISK_SELECTION_ENABLE, true);
     conf.set(ShuffleServerConf.RSS_STORAGE_BASE_PATH, Arrays.asList(storagePaths));
     conf.setLong(ShuffleServerConf.DISK_CAPACITY, 1024L);
     conf.setString(ShuffleServerConf.RSS_STORAGE_TYPE, StorageType.LOCALFILE.name());
@@ -89,12 +145,21 @@ public class LocalStorageManagerTest {
     String appId = "testStorageSelectionWhenReachingHighWatermark";
     ShuffleDataFlushEvent dataFlushEvent = toDataFlushEvent(appId, 1, 1);
     Storage storage1 = localStorageManager.selectStorage(dataFlushEvent);
-
-    ((LocalStorage) storage1).getMetaData().setSize(999);
-    localStorageManager = new LocalStorageManager(conf);
     Storage storage2 = localStorageManager.selectStorage(dataFlushEvent);
+    assertEquals(storage1, storage2);
 
-    assertNotEquals(storage1, storage2);
+    ((LocalStorage)storage1).getMetaData().setSize(999);
+    Storage storage3 = localStorageManager.selectStorage(dataFlushEvent);
+    assertNotEquals(storage1, storage3);
+
+    // Select storage for read event
+    ShuffleDataReadEvent dataReadEvent1 = new ShuffleDataReadEvent(appId, 1, 1, 1, 0);
+    assertEquals(storage1, localStorageManager.selectStorage(dataReadEvent1));
+    ShuffleDataReadEvent dataReadEvent2 = new ShuffleDataReadEvent(appId, 1, 1, 1, 1);
+    assertEquals(storage3, localStorageManager.selectStorage(dataReadEvent2));
+    // if selecting storage for out-of-range storage id, it will return null
+    ShuffleDataReadEvent dataReadEvent3 = new ShuffleDataReadEvent(appId, 1, 1, 1, 2);
+    assertNull(localStorageManager.selectStorage(dataReadEvent3));
   }
 
   @Test
@@ -127,9 +192,12 @@ public class LocalStorageManagerTest {
 
     // case2: one storage is corrupted, and it will switch to other storage at the first time of writing
     // event of (appId, shuffleId, startPartition)
-    ((LocalStorage)storage1).markCorrupted();
+    markCorrupted(storage1);
     Storage storage4 = localStorageManager.selectStorage(dataFlushEvent1);
-    assertNotEquals(storage4.getStoragePath(), storage1.getStoragePath());
+    assertNotEquals(
+        storage4.getStoragePath(),
+        storage1.getStoragePath()
+    );
     assertEquals(localStorageManager.selectStorage(dataReadEvent), storage4);
 
     // case3: one storage is corrupted when it happened after the original event has been written,
@@ -149,6 +217,10 @@ public class LocalStorageManagerTest {
     ((LocalStorage)restStorage).markCorrupted();
     Storage storage8 = localStorageManager.selectStorage(dataReadEvent);
     assertEquals(storage7, storage8);
+  }
+
+  private void markCorrupted(Storage storage) {
+    ((LocalStorage)storage).markCorrupted();
   }
 
   @Test

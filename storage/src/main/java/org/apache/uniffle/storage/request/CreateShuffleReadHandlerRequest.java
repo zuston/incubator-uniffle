@@ -46,7 +46,6 @@ public class CreateShuffleReadHandlerRequest {
   private ShuffleDataDistributionType distributionType;
   private Roaring64NavigableMap expectTaskIds;
   private boolean expectedTaskIdsBitmapFilterEnable;
-
   private IdHelper idHelper;
 
   public CreateShuffleReadHandlerRequest() {

@@ -391,7 +391,7 @@ public class ShuffleTaskManager {
 
   public ShuffleDataResult getShuffleData(
       String appId, Integer shuffleId, Integer partitionId, int partitionNumPerRange,
-      int partitionNum, String storageType, long offset, int length) {
+      int partitionNum, String storageType, long offset, int length, int storageId) {
     refreshAppId(appId);
 
     CreateShuffleReadHandlerRequest request = new CreateShuffleReadHandlerRequest();
@@ -403,20 +403,23 @@ public class ShuffleTaskManager {
     request.setStorageType(storageType);
     request.setRssBaseConf(conf);
     int[] range = ShuffleStorageUtils.getPartitionRange(partitionId, partitionNumPerRange, partitionNum);
-    Storage storage = storageManager.selectStorage(new ShuffleDataReadEvent(appId, shuffleId, partitionId, range[0]));
+    Storage storage = storageManager.selectStorage(
+        new ShuffleDataReadEvent(appId, shuffleId, partitionId, range[0], storageId)
+    );
     if (storage == null) {
       throw new FileNotFoundException("No such data stored in current storage manager.");
     }
 
     return storage.getOrCreateReadHandler(request).getShuffleData(offset, length);
   }
-
+  
   public ShuffleIndexResult getShuffleIndex(
       String appId,
       Integer shuffleId,
       Integer partitionId,
       int partitionNumPerRange,
-      int partitionNum) {
+      int partitionNum,
+      int storageId) {
     refreshAppId(appId);
     String storageType = conf.getString(RssBaseConf.RSS_STORAGE_TYPE);
     CreateShuffleReadHandlerRequest request = new CreateShuffleReadHandlerRequest();
@@ -428,7 +431,9 @@ public class ShuffleTaskManager {
     request.setStorageType(storageType);
     request.setRssBaseConf(conf);
     int[] range = ShuffleStorageUtils.getPartitionRange(partitionId, partitionNumPerRange, partitionNum);
-    Storage storage = storageManager.selectStorage(new ShuffleDataReadEvent(appId, shuffleId, partitionId, range[0]));
+    Storage storage = storageManager.selectStorage(
+        new ShuffleDataReadEvent(appId, shuffleId, partitionId, range[0], storageId)
+    );
     if (storage == null) {
       throw new FileNotFoundException("No such data in current storage manager.");
     }

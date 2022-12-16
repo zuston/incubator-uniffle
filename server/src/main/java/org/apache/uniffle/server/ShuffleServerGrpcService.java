@@ -517,7 +517,7 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
     Storage storage = shuffleServer
         .getStorageManager()
         .selectStorage(
-            new ShuffleDataReadEvent(appId, shuffleId, partitionId, range[0])
+            new ShuffleDataReadEvent(appId, shuffleId, partitionId, range[0], request.getStorageId())
         );
     if (storage != null) {
       storage.updateReadMetrics(new StorageReadMetrics(appId, shuffleId));
@@ -526,8 +526,11 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
     if (shuffleServer.getShuffleBufferManager().requireReadMemoryWithRetry(length)) {
       try {
         long start = System.currentTimeMillis();
-        sdr = shuffleServer.getShuffleTaskManager().getShuffleData(appId, shuffleId, partitionId,
-            partitionNumPerRange, partitionNum, storageType, offset, length);
+        sdr = shuffleServer.getShuffleTaskManager().getShuffleData(
+            appId, shuffleId, partitionId,
+            partitionNumPerRange, partitionNum, storageType, offset, length,
+            request.getStorageId()
+        );
         long readTime = System.currentTimeMillis() - start;
         ShuffleServerMetrics.counterTotalReadTime.inc(readTime);
         ShuffleServerMetrics.counterTotalReadDataSize.inc(sdr.getData().length);
@@ -573,6 +576,8 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
     int partitionId = request.getPartitionId();
     int partitionNumPerRange = request.getPartitionNumPerRange();
     int partitionNum = request.getPartitionNum();
+    int storageId = request.getStorageId();
+
     StatusCode status = StatusCode.SUCCESS;
     String msg = "OK";
     GetLocalShuffleIndexResponse reply;
@@ -581,7 +586,7 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
 
     int[] range = ShuffleStorageUtils.getPartitionRange(partitionId, partitionNumPerRange, partitionNum);
     Storage storage = shuffleServer.getStorageManager()
-        .selectStorage(new ShuffleDataReadEvent(appId, shuffleId, partitionId, range[0]));
+        .selectStorage(new ShuffleDataReadEvent(appId, shuffleId, partitionId, range[0], storageId));
     if (storage != null) {
       storage.updateReadMetrics(new StorageReadMetrics(appId, shuffleId));
     }
@@ -593,7 +598,7 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
       try {
         long start = System.currentTimeMillis();
         ShuffleIndexResult shuffleIndexResult = shuffleServer.getShuffleTaskManager().getShuffleIndex(
-            appId, shuffleId, partitionId, partitionNumPerRange, partitionNum);
+            appId, shuffleId, partitionId, partitionNumPerRange, partitionNum, storageId);
         long readTime = System.currentTimeMillis() - start;
 
         byte[] data = shuffleIndexResult.getIndexData();
@@ -608,9 +613,11 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
         builder.setIndexData(UnsafeByteOperations.unsafeWrap(data));
         builder.setDataFileLen(shuffleIndexResult.getDataFileLen());
         reply = builder.build();
-      } catch (FileNotFoundException indexFileNotFoundException) {
-        LOG.warn("Index file for {} is not found, maybe the data has been flushed to cold storage.",
-            requestInfo, indexFileNotFoundException);
+      } catch (FileNotFoundException | IndexOutOfBoundsException exception) {
+        if (exception instanceof FileNotFoundException) {
+          LOG.warn("Index file for {} is not found, maybe the data has been flushed to cold storage.",
+              requestInfo, exception);
+        }
         reply = GetLocalShuffleIndexResponse.newBuilder()
             .setStatus(valueOf(status))
             .build();
