@@ -23,12 +23,18 @@ public class ShuffleDataReadEvent {
   private int shuffleId;
   private int partitionId;
   private int startPartition;
+  private int storageIndex;
 
   public ShuffleDataReadEvent(String appId, int shuffleId, int partitionId, int[] range) {
+    this(appId, shuffleId, partitionId, range, 0);
+  }
+
+  public ShuffleDataReadEvent(String appId, int shuffleId, int partitionId, int[] range, int storageIndex) {
     this.appId = appId;
     this.shuffleId = shuffleId;
     this.partitionId = partitionId;
     this.startPartition = range[0];
+    this.storageIndex = storageIndex;
   }
 
   public String getAppId() {
@@ -45,5 +51,9 @@ public class ShuffleDataReadEvent {
 
   public int getStartPartition() {
     return startPartition;
+  }
+
+  public int getStorageIndex() {
+    return storageIndex;
   }
 }
