@@ -50,6 +50,12 @@ public class RssSparkConfig {
       .withDescription("The timeout of spilling data to remote shuffle server, "
           + "which will be triggered by Spark TaskMemoryManager. Unit is sec, default value is 1");
 
+  public static final ConfigOption<Boolean> RSS_MEMORY_SPILL_ENABLED = ConfigOptions
+      .key("rss.client.memory.spill.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("The memory spill switch triggered by Spark TaskMemoryManager, default value is false.");
+
   public static final String SPARK_RSS_CONFIG_PREFIX = "spark.";
 
   public static final ConfigEntry<Integer> RSS_PARTITION_NUM_PER_RANGE = createIntegerBuilder(
