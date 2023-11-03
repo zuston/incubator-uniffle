@@ -31,6 +31,7 @@ pub mod runtime;
 pub mod signal;
 pub mod store;
 pub mod util;
+pub mod lock;
 
 use crate::app::AppManager;
 use crate::grpc::DefaultShuffleServer;

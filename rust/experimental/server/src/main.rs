@@ -44,6 +44,8 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter, Registry};
 
 pub mod app;
+
+mod lock;
 mod await_tree;
 mod config;
 mod error;
