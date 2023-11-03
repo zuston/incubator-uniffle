@@ -33,6 +33,7 @@ use crate::readable_size::ReadableSize;
 use crate::store::hdfs::HdfsStore;
 use crate::store::localfile::LocalFileStore;
 use crate::store::memory::{MemorySnapshot, MemoryStore};
+use crate::lock::Shim;
 
 use crate::store::{
     PartitionedDataBlock, Persistent, RequireBufferResponse, ResponseData, ResponseDataIndex, Store,
@@ -403,10 +404,20 @@ impl Store for HybridStore {
             if let Ok(size) = ReadableSize::from_str(max_spill_size.as_str()) {
                 let buffer = self
                     .hot_store
-                    .get_or_create_underlying_staging_buffer(uid.clone());
-                let mut buffer_inner = buffer.lock().await;
-                if size.as_bytes() < buffer_inner.get_staging_size()? as u64 {
-                    let (in_flight_uid, blocks) = buffer_inner.migrate_staging_to_in_flight()?;
+                    .get_or_create_underlying_staging_buffer(uid.clone())
+                    .clone();
+
+                if let Some((in_flight_uid, blocks)) = {
+                    let mut buffer_inner = buffer.lock().unwrap();
+                    let staging_size = buffer_inner.get_staging_size()? as u64;
+                    if size.as_bytes() < staging_size {
+                        None
+                    } else {
+                        let (in_flight_uid, blocks) =
+                            buffer_inner.migrate_staging_to_in_flight()?;
+                        Some((in_flight_uid, blocks))
+                    }
+                } {
                     self.make_memory_buffer_flush(in_flight_uid, blocks, uid.clone())
                         .await?;
                 }
@@ -511,9 +522,11 @@ pub async fn watermark_flush(store: Arc<HybridStore>) -> Result<()> {
 
     let mut flushed_size = 0u64;
     for (partition_id, buffer) in buffers {
-        let mut buffer_inner = buffer.lock().await;
-        let (in_flight_uid, blocks) = buffer_inner.migrate_staging_to_in_flight()?;
-        drop(buffer_inner);
+        let (in_flight_uid, blocks) = {
+            let mut buffer_inner = buffer.lock().unwrap();
+            buffer_inner.migrate_staging_to_in_flight()?
+        };
+
         for block in &blocks {
             flushed_size += block.length as u64;
         }

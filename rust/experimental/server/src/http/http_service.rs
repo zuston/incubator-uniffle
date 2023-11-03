@@ -23,10 +23,12 @@ use poem::http::StatusCode;
 use poem::listener::TcpListener;
 use poem::{get, Route, RouteMethod, Server};
 
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 use crate::http::{HTTPServer, Handler};
 use crate::runtime::manager::RuntimeManager;
+use crate::lock::Shim;
+
 impl ResponseError for WorkerError {
     fn status(&self) -> StatusCode {
         StatusCode::BAD_REQUEST
