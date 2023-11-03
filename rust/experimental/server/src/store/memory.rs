@@ -30,6 +30,7 @@ use crate::store::{
     DataSegment, PartitionedDataBlock, PartitionedMemoryData, RequireBufferResponse, ResponseData,
     ResponseDataIndex, Store,
 };
+use crate::lock::Shim;
 use crate::*;
 use async_trait::async_trait;
 use bytes::BytesMut;
@@ -42,7 +43,8 @@ use std::str::FromStr;
 use crate::store::mem::MemoryBufferTicket;
 use log::error;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use parking_lot::Mutex;
 use std::time::Duration;
 use tokio::time::sleep as delay_for;
 

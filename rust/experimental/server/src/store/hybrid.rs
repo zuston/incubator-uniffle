@@ -33,6 +33,7 @@ use crate::readable_size::ReadableSize;
 use crate::store::hdfs::HdfsStore;
 use crate::store::localfile::LocalFileStore;
 use crate::store::memory::{MemorySnapshot, MemoryStore};
+use crate::lock::Shim;
 
 use crate::store::{
     PartitionedDataBlock, Persistent, RequireBufferResponse, ResponseData, ResponseDataIndex, Store,

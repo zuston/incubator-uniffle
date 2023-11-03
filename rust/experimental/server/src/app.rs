@@ -31,6 +31,7 @@ use crate::store::{
     StoreProvider,
 };
 use crate::util::current_timestamp_sec;
+use crate::lock::Shim;
 use anyhow::Result;
 use bytes::Bytes;
 use croaring::treemap::JvmSerializer;
@@ -48,7 +49,7 @@ use std::str::FromStr;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::sync::RwLock;
+use parking_lot::RwLock;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
