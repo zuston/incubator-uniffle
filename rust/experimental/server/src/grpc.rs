@@ -35,6 +35,8 @@ use crate::store::{PartitionedData, ResponseDataIndex};
 use await_tree::InstrumentAwait;
 use bytes::{BufMut, BytesMut};
 use std::collections::HashMap;
+use std::sync::{Arc};
+use parking_lot::Mutex;
 
 use log::{debug, error, info, warn};
 
@@ -73,11 +75,12 @@ impl Into<i32> for StatusCode {
 
 pub struct DefaultShuffleServer {
     app_manager_ref: AppManagerRef,
+    send_lock: Arc<Mutex<()>>,
 }
 
 impl DefaultShuffleServer {
     pub fn from(app_manager_ref: AppManagerRef) -> DefaultShuffleServer {
-        DefaultShuffleServer { app_manager_ref }
+        DefaultShuffleServer { app_manager_ref, send_lock: Arc::new(Mutex::new(())) }
     }
 }
 
@@ -115,6 +118,7 @@ impl ShuffleServer for DefaultShuffleServer {
         &self,
         request: Request<SendShuffleDataRequest>,
     ) -> Result<Response<SendShuffleDataResponse>, Status> {
+        let _x = self.send_lock.clone().lock().unwrap();
         let timer = GRPC_SEND_DATA_PROCESS_TIME.start_timer();
         let req = request.into_inner();
         let app_id = req.app_id;

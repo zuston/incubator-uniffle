@@ -42,7 +42,8 @@ use std::str::FromStr;
 use crate::store::mem::MemoryBufferTicket;
 use log::error;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use parking_lot::Mutex;
 use std::time::Duration;
 use tokio::time::sleep as delay_for;
 
@@ -478,10 +479,15 @@ impl Store for MemoryStore {
                 _removed_list.push(pid);
             }
         }
+        drop(read_only_state_view);
 
         let mut used = 0;
         for removed_pid in _removed_list {
             if let Some(entry) = self.state.remove(removed_pid) {
+                let ref_num = Arc::strong_count(&entry.1);
+                if ref_num != 1 {
+                    info!("Ref num: {}", ref_num);
+                }
                 used += entry.1.lock().unwrap().total_size;
             }
         }

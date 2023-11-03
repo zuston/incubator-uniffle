@@ -3189,6 +3189,7 @@ dependencies = [
  "hyper",
  "log",
  "once_cell",
+ "parking_lot",
  "pin-project-lite",
  "poem",
  "pprof",
