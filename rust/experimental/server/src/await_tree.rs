@@ -19,7 +19,9 @@ use await_tree::{Registry, TreeRoot};
 
 use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use crate::lock::Shim;
+use parking_lot::Mutex;
 
 type AwaitTreeRegistryRef = Arc<Mutex<Registry<u64>>>;
 
