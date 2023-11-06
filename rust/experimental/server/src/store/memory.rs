@@ -619,7 +619,7 @@ impl MemorySnapshot {
 
 #[derive(Clone)]
 pub struct MemoryBudget {
-    inner: Arc<std::sync::Mutex<MemoryBudgetInner>>,
+    inner: Arc<Mutex<MemoryBudgetInner>>,
 }
 
 struct MemoryBudgetInner {
@@ -633,7 +633,7 @@ impl MemoryBudget {
     fn new(capacity: i64) -> MemoryBudget {
         GAUGE_MEMORY_CAPACITY.set(capacity);
         MemoryBudget {
-            inner: Arc::new(std::sync::Mutex::new(MemoryBudgetInner {
+            inner: Arc::new(Mutex::new(MemoryBudgetInner {
                 capacity,
                 allocated: 0,
                 used: 0,

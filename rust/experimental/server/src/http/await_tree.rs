@@ -17,6 +17,7 @@
 
 use crate::await_tree::AWAIT_TREE_REGISTRY;
 use crate::http::Handler;
+use crate::lock::Shim;
 use poem::endpoint::make;
 use poem::{get, RouteMethod};
 
