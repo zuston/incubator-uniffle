@@ -15,10 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use crate::app::{
-    AppManagerRef, GetBlocksContext, PartitionedUId, ReadingIndexViewContext, ReadingOptions,
-    ReadingViewContext, ReportBlocksContext, RequireBufferContext, WritingViewContext,
-};
+use crate::app::{App, AppManagerRef, GetBlocksContext, PartitionedUId, ReadingIndexViewContext, ReadingOptions, ReadingViewContext, ReportBlocksContext, RequireBufferContext, WritingViewContext};
 use crate::proto::uniffle::shuffle_server_server::ShuffleServer;
 use crate::proto::uniffle::{
     AppHeartBeatRequest, AppHeartBeatResponse, FinishShuffleRequest, FinishShuffleResponse,
@@ -31,10 +28,11 @@ use crate::proto::uniffle::{
     ShuffleRegisterRequest, ShuffleRegisterResponse, ShuffleUnregisterRequest,
     ShuffleUnregisterResponse,
 };
-use crate::store::{PartitionedData, ResponseDataIndex};
+use crate::store::{PartitionedData, PartitionedDataBlock, ResponseDataIndex};
 use await_tree::InstrumentAwait;
 use bytes::{BufMut, BytesMut};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use log::{debug, error, info, warn};
 
@@ -81,6 +79,26 @@ impl DefaultShuffleServer {
     }
 }
 
+impl DefaultShuffleServer {
+    async fn send_shuffle_data(app: Arc<App>, app_id: String, shuffle_id: i32, blocks_map: HashMap<i32, Vec<PartitionedDataBlock>>) -> anyhow::Result<()> {
+        for (partition_id, blocks) in blocks_map.into_iter() {
+            let uid = PartitionedUId {
+                app_id: app_id.clone(),
+                shuffle_id,
+                partition_id,
+            };
+            let ctx = WritingViewContext {
+                uid: uid.clone(),
+                data_blocks: blocks,
+            };
+            app.insert(ctx)
+                .instrument_await(format!("insert data for app. uid: {:?}", &uid))
+                .await?
+        }
+        Ok(())
+    }
+}
+
 #[tonic::async_trait]
 impl ShuffleServer for DefaultShuffleServer {
     async fn register_shuffle(
@@ -119,7 +137,7 @@ impl ShuffleServer for DefaultShuffleServer {
         let req = request.into_inner();
         let app_id = req.app_id;
         let shuffle_id: i32 = req.shuffle_id;
-        let ticket_id = req.require_buffer_id;
+        let _ticket_id = req.require_buffer_id;
 
         GRPC_SEND_DATA_TRANSPORT_TIME
             .observe((util::current_timestamp_ms() - req.timestamp as u128) as f64);
@@ -135,14 +153,14 @@ impl ShuffleServer for DefaultShuffleServer {
 
         let app = app_option.unwrap();
 
-        if !app.is_buffer_ticket_exist(ticket_id) {
-            return Ok(Response::new(SendShuffleDataResponse {
-                status: StatusCode::NO_BUFFER.into(),
-                ret_msg: "No such buffer ticket id, it may be discarded due to timeout".to_string(),
-            }));
-        } else {
-            app.discard_tickets(ticket_id);
-        }
+        // if !app.is_buffer_ticket_exist(ticket_id) {
+        //     return Ok(Response::new(SendShuffleDataResponse {
+        //         status: StatusCode::NO_BUFFER.into(),
+        //         ret_msg: "No such buffer ticket id, it may be discarded due to timeout".to_string(),
+        //     }));
+        // } else {
+        //     app.discard_tickets(ticket_id);
+        // }
 
         let mut blocks_map = HashMap::new();
         for shuffle_data in req.shuffle_data {
@@ -154,33 +172,19 @@ impl ShuffleServer for DefaultShuffleServer {
             blocks.extend(partitioned_blocks);
         }
 
-        for (partition_id, blocks) in blocks_map.into_iter() {
-            let uid = PartitionedUId {
-                app_id: app_id.clone(),
-                shuffle_id,
-                partition_id,
-            };
-            let ctx = WritingViewContext {
-                uid: uid.clone(),
-                data_blocks: blocks,
-            };
-
-            let inserted = app
-                .insert(ctx)
-                .instrument_await(format!("insert data for app. uid: {:?}", &uid))
-                .await;
-            if inserted.is_err() {
-                let err = format!(
-                    "Errors on putting data. app_id: {}, err: {:?}",
-                    &app_id,
-                    inserted.err()
-                );
-                error!("{}", &err);
-                return Ok(Response::new(SendShuffleDataResponse {
-                    status: StatusCode::INTERNAL_ERROR.into(),
-                    ret_msg: err,
-                }));
-            }
+        if let Err(e) = DefaultShuffleServer::send_shuffle_data(app, app_id.clone(), shuffle_id, blocks_map)
+            .instrument_await(format!("Sending all the blocks for app: {}", app_id))
+            .await {
+            let err = format!(
+                "Errors on putting data. app_id: {}, err: {:?}",
+                &app_id,
+                e
+            );
+            error!("{}", &err);
+            return Ok(Response::new(SendShuffleDataResponse {
+                status: StatusCode::INTERNAL_ERROR.into(),
+                ret_msg: err,
+            }));
         }
 
         timer.observe_duration();
