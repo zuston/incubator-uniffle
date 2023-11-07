@@ -219,7 +219,7 @@ fn main() -> Result<()> {
     HTTP_SERVICE.start(runtime_manager.clone(), http_port);
 
     info!("Starting GRpc server with port:[{}] ......", rpc_port);
-    let shuffle_server = DefaultShuffleServer::from(app_manager_ref);
+    let shuffle_server = DefaultShuffleServer::from(app_manager_ref, runtime_manager.clone());
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port as u16);
     let service = ShuffleServerServer::new(shuffle_server)
         .max_decoding_message_size(usize::MAX)

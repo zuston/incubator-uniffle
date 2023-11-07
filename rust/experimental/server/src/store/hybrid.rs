@@ -343,8 +343,7 @@ impl Store for HybridStore {
         self.runtime_manager.default_runtime.spawn(async move {
             while let Ok(message) = store.memory_spill_recv.recv().await {
                 let await_root = await_tree_registry
-                    .register(format!("hot->warm flush."))
-                    .await;
+                    .register(format!("hot->warm flush."));
 
                 // using acquire_owned(), refer to https://github.com/tokio-rs/tokio/issues/1998
                 let concurrency_guarder =

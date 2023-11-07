@@ -41,7 +41,7 @@ impl AwaitTreeInner {
         }
     }
 
-    pub async fn register(&self, msg: String) -> TreeRoot {
+    pub fn register(&self, msg: String) -> TreeRoot {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let msg = format!("actor=[{}], {}", id, msg);
         self.inner.lock().unwrap().register(id, msg)

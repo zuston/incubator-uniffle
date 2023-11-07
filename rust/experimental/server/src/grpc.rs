@@ -43,6 +43,8 @@ use crate::metric::{
 };
 use crate::util;
 use tonic::{Request, Response, Status};
+use crate::await_tree::AWAIT_TREE_REGISTRY;
+use crate::runtime::manager::RuntimeManager;
 
 /// Use the maximum value for HTTP/2 connection window size to avoid deadlock among multiplexed
 /// streams on the same connection.
@@ -69,13 +71,36 @@ impl Into<i32> for StatusCode {
     }
 }
 
+struct BatchBlocks(Arc<App>, String, i32, HashMap<i32, Vec<PartitionedDataBlock>>);
+
 pub struct DefaultShuffleServer {
     app_manager_ref: AppManagerRef,
+    data_sent_recv: async_channel::Receiver<BatchBlocks>,
+    data_sent_send: async_channel::Sender<BatchBlocks>,
 }
 
 impl DefaultShuffleServer {
-    pub fn from(app_manager_ref: AppManagerRef) -> DefaultShuffleServer {
-        DefaultShuffleServer { app_manager_ref }
+    pub fn from(app_manager_ref: AppManagerRef, runtime_manager: RuntimeManager) -> DefaultShuffleServer {
+        let (send, recv) = async_channel::unbounded();
+        for _ in 0..120 {
+            let receiver: async_channel::Receiver<BatchBlocks> = recv.clone();
+            let await_tree_registry = AWAIT_TREE_REGISTRY.clone();
+            let await_root = await_tree_registry
+                .register(format!("processing data sent."));
+            runtime_manager.read_runtime.spawn(await_root.instrument(async move {
+                while let Ok(blocks) = receiver.recv().await {
+                    let _ = DefaultShuffleServer::send_shuffle_data(
+                        blocks.0,
+                        blocks.1,
+                        blocks.2,
+                        blocks.3
+                    )
+                        .instrument_await("processing data in the channel")
+                        .await;
+                }
+            }));
+        }
+        DefaultShuffleServer { app_manager_ref, data_sent_recv: recv, data_sent_send: send }
     }
 }
 
@@ -137,7 +162,7 @@ impl ShuffleServer for DefaultShuffleServer {
         let req = request.into_inner();
         let app_id = req.app_id;
         let shuffle_id: i32 = req.shuffle_id;
-        let _ticket_id = req.require_buffer_id;
+        let ticket_id = req.require_buffer_id;
 
         GRPC_SEND_DATA_TRANSPORT_TIME
             .observe((util::current_timestamp_ms() - req.timestamp as u128) as f64);
@@ -153,14 +178,14 @@ impl ShuffleServer for DefaultShuffleServer {
 
         let app = app_option.unwrap();
 
-        // if !app.is_buffer_ticket_exist(ticket_id) {
-        //     return Ok(Response::new(SendShuffleDataResponse {
-        //         status: StatusCode::NO_BUFFER.into(),
-        //         ret_msg: "No such buffer ticket id, it may be discarded due to timeout".to_string(),
-        //     }));
-        // } else {
-        //     app.discard_tickets(ticket_id);
-        // }
+        if !app.is_buffer_ticket_exist(ticket_id) {
+            return Ok(Response::new(SendShuffleDataResponse {
+                status: StatusCode::NO_BUFFER.into(),
+                ret_msg: "No such buffer ticket id, it may be discarded due to timeout".to_string(),
+            }));
+        } else {
+            app.discard_tickets(ticket_id);
+        }
 
         let mut blocks_map = HashMap::new();
         for shuffle_data in req.shuffle_data {
@@ -172,20 +197,26 @@ impl ShuffleServer for DefaultShuffleServer {
             blocks.extend(partitioned_blocks);
         }
 
-        if let Err(e) = DefaultShuffleServer::send_shuffle_data(app, app_id.clone(), shuffle_id, blocks_map)
-            .instrument_await(format!("Sending all the blocks for app: {}", app_id))
-            .await {
-            let err = format!(
-                "Errors on putting data. app_id: {}, err: {:?}",
-                &app_id,
-                e
-            );
-            error!("{}", &err);
-            return Ok(Response::new(SendShuffleDataResponse {
-                status: StatusCode::INTERNAL_ERROR.into(),
-                ret_msg: err,
-            }));
-        }
+        let _ = self.data_sent_send.send(
+            BatchBlocks(app, app_id.clone(), shuffle_id, blocks_map)
+        )
+            .instrument_await("sending to the channel")
+            .await;
+
+        // if let Err(e) = DefaultShuffleServer::send_shuffle_data(app, app_id.clone(), shuffle_id, blocks_map)
+        //     .instrument_await(format!("Sending all the blocks for app: {}", app_id))
+        //     .await {
+        //     let err = format!(
+        //         "Errors on putting data. app_id: {}, err: {:?}",
+        //         &app_id,
+        //         e
+        //     );
+        //     error!("{}", &err);
+        //     return Ok(Response::new(SendShuffleDataResponse {
+        //         status: StatusCode::INTERNAL_ERROR.into(),
+        //         ret_msg: err,
+        //     }));
+        // }
 
         timer.observe_duration();
 
@@ -767,7 +798,7 @@ pub mod await_tree_middleware {
 
             let manager = self.manager.clone();
             async move {
-                let root = manager.register(format!("{}", req.uri().path())).await;
+                let root = manager.register(format!("{}", req.uri().path()));
                 root.instrument(inner.call(req)).await
             }
         }
