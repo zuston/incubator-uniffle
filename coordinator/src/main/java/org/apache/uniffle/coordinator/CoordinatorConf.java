@@ -251,4 +251,26 @@ public class CoordinatorConf extends RssBaseConf {
   public boolean loadConfFromFile(String fileName) {
     return loadConfFromFile(fileName, ConfigUtils.getAllConfigOptions(CoordinatorConf.class));
   }
+
+  public static final ConfigOption<Boolean> COORDINATOR_SAFE_MODE_ENABLE = ConfigOptions
+      .key("rss.coordinator.qiyi.safe.mode.enable")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("");
+  public static final ConfigOption<Boolean> COORDINATOR_GREYSCALE_MODE_ENABLE = ConfigOptions
+      .key("rss.coordinator.qiyi.greyscale.mode.enable")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("");
+  public static final ConfigOption<String> COORDINATOR_QIYI_ACCESS_WHITE_LIST_PATH = ConfigOptions
+      .key("rss.coordinator.qiyi.access.whitelist.path")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Once specify this conf, the coordinator will enter the greyscale mode. "
+          + "Qiyi Access check's white list path");
+  public static final ConfigOption<String> COORDINATOR_QIYI_ACCESS_BLACK_LIST_PATH = ConfigOptions
+      .key("rss.coordinator.qiyi.access.blacklist.path")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("");
 }
