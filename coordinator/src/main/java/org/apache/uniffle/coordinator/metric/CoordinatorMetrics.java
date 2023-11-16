@@ -61,6 +61,9 @@ public class CoordinatorMetrics {
   private static MetricsManager metricsManager;
   private static boolean isRegister = false;
 
+  private static final String TOTAL_QIYI_ACCESS_CHECKER_DENIED_REQUEST = "total_qiyi_access_checker_denied_request";
+  public static Counter counterTotalQiyiAccessCheckerDeniedRequest;
+
   public static synchronized void register(CollectorRegistry collectorRegistry) {
     if (!isRegister) {
       Map<String, String> labels = Maps.newHashMap();
@@ -115,5 +118,7 @@ public class CoordinatorMetrics {
         metricsManager.addCounter(TOTAL_CANDIDATES_DENIED_REQUEST);
     counterTotalQuotaDeniedRequest = metricsManager.addCounter(TOTAL_QUOTA_DENIED_REQUEST);
     counterTotalLoadDeniedRequest = metricsManager.addCounter(TOTAL_LOAD_DENIED_REQUEST);
+
+    counterTotalQiyiAccessCheckerDeniedRequest = metricsManager.addCounter(TOTAL_QIYI_ACCESS_CHECKER_DENIED_REQUEST);
   }
 }
