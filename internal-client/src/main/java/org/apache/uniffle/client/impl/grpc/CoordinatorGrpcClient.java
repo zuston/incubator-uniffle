@@ -39,6 +39,7 @@ import org.apache.uniffle.client.request.RssApplicationInfoRequest;
 import org.apache.uniffle.client.request.RssFetchClientConfRequest;
 import org.apache.uniffle.client.request.RssFetchRemoteStorageRequest;
 import org.apache.uniffle.client.request.RssGetShuffleAssignmentsRequest;
+import org.apache.uniffle.client.request.RssReportTaskFailedRequest;
 import org.apache.uniffle.client.request.RssSendHeartBeatRequest;
 import org.apache.uniffle.client.response.RssAccessClusterResponse;
 import org.apache.uniffle.client.response.RssAppHeartBeatResponse;
@@ -46,6 +47,7 @@ import org.apache.uniffle.client.response.RssApplicationInfoResponse;
 import org.apache.uniffle.client.response.RssFetchClientConfResponse;
 import org.apache.uniffle.client.response.RssFetchRemoteStorageResponse;
 import org.apache.uniffle.client.response.RssGetShuffleAssignmentsResponse;
+import org.apache.uniffle.client.response.RssReportTaskFailedResponse;
 import org.apache.uniffle.client.response.RssSendHeartBeatResponse;
 import org.apache.uniffle.common.PartitionRange;
 import org.apache.uniffle.common.RemoteStorageInfo;
@@ -428,5 +430,23 @@ public class CoordinatorGrpcClient extends GrpcClient implements CoordinatorClie
       }
     }
     return serverToPartitionRanges;
+  }
+
+  @Override
+  public RssReportTaskFailedResponse reportTaskFailed(RssReportTaskFailedRequest request) {
+    RssProtos.ReportTaskFailedRequest reportTaskFailedRequest = RssProtos.ReportTaskFailedRequest.newBuilder()
+        .setAppId(request.getAppId())
+        .setTaskId(request.getTaskId())
+        .setTaskAttemptId(request.getTaskAttemptId())
+        .setShuffleId(request.getShuffleId())
+        .setExceptionMessage(request.getExceptionMsg())
+        .build();
+    try {
+      blockingStub.reportTaskFailed(reportTaskFailedRequest);
+      return new RssReportTaskFailedResponse(StatusCode.SUCCESS);
+    } catch (Exception e) {
+      LOG.info("Failed to report task failed to coordinator.", e);
+      return new RssReportTaskFailedResponse(StatusCode.INTERNAL_ERROR);
+    }
   }
 }

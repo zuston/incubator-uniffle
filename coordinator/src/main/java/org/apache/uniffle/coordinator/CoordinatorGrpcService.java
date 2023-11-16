@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.protobuf.Empty;
 import io.grpc.Context;
@@ -38,9 +39,11 @@ import org.apache.uniffle.common.ServerStatus;
 import org.apache.uniffle.common.storage.StorageInfoUtils;
 import org.apache.uniffle.coordinator.access.AccessCheckResult;
 import org.apache.uniffle.coordinator.access.AccessInfo;
+import org.apache.uniffle.coordinator.metric.CoordinatorMetrics;
 import org.apache.uniffle.coordinator.strategy.assignment.PartitionRangeAssignment;
 import org.apache.uniffle.coordinator.util.CoordinatorUtils;
 import org.apache.uniffle.proto.CoordinatorServerGrpc;
+import org.apache.uniffle.proto.RssProtos;
 import org.apache.uniffle.proto.RssProtos.AccessClusterRequest;
 import org.apache.uniffle.proto.RssProtos.AccessClusterResponse;
 import org.apache.uniffle.proto.RssProtos.AppHeartBeatRequest;
@@ -414,5 +417,38 @@ public class CoordinatorGrpcService extends CoordinatorServerGrpc.CoordinatorSer
         serverStatus,
         StorageInfoUtils.fromProto(request.getStorageInfoMap()),
         request.getServerId().getNettyPort());
+  }
+
+  private Map<String, Byte> appsWithFailedTasks = Maps.newConcurrentMap();
+
+  @Override
+  public void reportTaskFailed(
+      RssProtos.ReportTaskFailedRequest request,
+      StreamObserver<RssProtos.ReportTaskFailedResponse> responseObserver) {
+    String appId = request.getAppId();
+    int shuffleId = request.getShuffleId();
+    String taskId = request.getTaskId();
+    long taskAttempt = request.getTaskAttemptId();
+    String exceptionMsg = request.getExceptionMessage();
+
+    LOG.warn("Report failed task from client, appId: {}, shuffleId: {}, taskId: {}, "
+        + "taskAttemptId: {}, exceptionMsg: {}", appId, shuffleId, taskId, taskAttempt, exceptionMsg);
+
+    CoordinatorMetrics.counterTotalFailedTaskReportNum.inc();
+
+    if (!appsWithFailedTasks.containsKey(appId)) {
+      appsWithFailedTasks.put(appId, (byte) 0);
+      CoordinatorMetrics.counterTotalAppWithFailedTasksNum.inc();
+    }
+    if (appsWithFailedTasks.size() > 1000000) {
+      LOG.info("Cleanup the apps set with failed tasks to avoid OOM.");
+      appsWithFailedTasks = Maps.newConcurrentMap();
+    }
+
+    RssProtos.ReportTaskFailedResponse response = RssProtos.ReportTaskFailedResponse.newBuilder()
+        .setStatus(StatusCode.SUCCESS)
+        .build();
+    responseObserver.onNext(response);
+    responseObserver.onCompleted();
   }
 }

@@ -37,6 +37,11 @@ import org.apache.uniffle.common.config.RssConf;
 
 public class RssSparkConfig {
 
+  public static final ConfigOption<Boolean> RSS_TASK_FAILED_CALLBACK_ENABLED =
+      ConfigOptions.key("rss.task.failed.callback.enable")
+          .booleanType()
+          .defaultValue(true);
+
   public static final ConfigOption<Long> RSS_CLIENT_SEND_SIZE_LIMITATION =
       ConfigOptions.key("rss.client.send.size.limit")
           .longType()

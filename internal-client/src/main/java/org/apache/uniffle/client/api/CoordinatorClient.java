@@ -23,6 +23,7 @@ import org.apache.uniffle.client.request.RssApplicationInfoRequest;
 import org.apache.uniffle.client.request.RssFetchClientConfRequest;
 import org.apache.uniffle.client.request.RssFetchRemoteStorageRequest;
 import org.apache.uniffle.client.request.RssGetShuffleAssignmentsRequest;
+import org.apache.uniffle.client.request.RssReportTaskFailedRequest;
 import org.apache.uniffle.client.request.RssSendHeartBeatRequest;
 import org.apache.uniffle.client.response.RssAccessClusterResponse;
 import org.apache.uniffle.client.response.RssAppHeartBeatResponse;
@@ -30,6 +31,7 @@ import org.apache.uniffle.client.response.RssApplicationInfoResponse;
 import org.apache.uniffle.client.response.RssFetchClientConfResponse;
 import org.apache.uniffle.client.response.RssFetchRemoteStorageResponse;
 import org.apache.uniffle.client.response.RssGetShuffleAssignmentsResponse;
+import org.apache.uniffle.client.response.RssReportTaskFailedResponse;
 import org.apache.uniffle.client.response.RssSendHeartBeatResponse;
 
 public interface CoordinatorClient {
@@ -51,4 +53,6 @@ public interface CoordinatorClient {
   String getDesc();
 
   void close();
+
+  RssReportTaskFailedResponse reportTaskFailed(RssReportTaskFailedRequest request);
 }

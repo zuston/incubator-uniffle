@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -46,6 +47,7 @@ import com.google.common.util.concurrent.Uninterruptibles;
 import org.apache.spark.Partitioner;
 import org.apache.spark.ShuffleDependency;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkEnv;
 import org.apache.spark.TaskContext;
 import org.apache.spark.executor.ShuffleWriteMetrics;
 import org.apache.spark.scheduler.MapStatus;
@@ -60,13 +62,16 @@ import org.apache.spark.storage.BlockManagerId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.uniffle.client.api.CoordinatorClient;
 import org.apache.uniffle.client.api.ShuffleManagerClient;
 import org.apache.uniffle.client.api.ShuffleWriteClient;
 import org.apache.uniffle.client.factory.ShuffleManagerClientFactory;
 import org.apache.uniffle.client.request.RssReassignServersRequest;
 import org.apache.uniffle.client.request.RssReportShuffleWriteFailureRequest;
+import org.apache.uniffle.client.request.RssReportTaskFailedRequest;
 import org.apache.uniffle.client.response.RssReassignServersReponse;
 import org.apache.uniffle.client.response.RssReportShuffleWriteFailureResponse;
+import org.apache.uniffle.client.response.RssReportTaskFailedResponse;
 import org.apache.uniffle.common.ClientType;
 import org.apache.uniffle.common.ShuffleBlockInfo;
 import org.apache.uniffle.common.ShuffleServerInfo;
@@ -75,7 +80,10 @@ import org.apache.uniffle.common.config.RssConf;
 import org.apache.uniffle.common.exception.RssException;
 import org.apache.uniffle.common.exception.RssSendFailedException;
 import org.apache.uniffle.common.exception.RssWaitFailedException;
+import org.apache.uniffle.common.rpc.StatusCode;
 import org.apache.uniffle.storage.util.StorageType;
+
+import static org.apache.spark.shuffle.RssSparkConfig.RSS_TASK_FAILED_CALLBACK_ENABLED;
 
 public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
 
@@ -252,51 +260,97 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
       createCombiner = shuffleDependency.aggregator().get().createCombiner();
     }
     while (records.hasNext()) {
-      // Task should fast fail when sending data failed
-      checkIfBlocksFailed();
-
       Product2<K, V> record = records.next();
-      K key = record._1();
-      int partition = getPartition(key);
-      if (isCombine) {
-        Object c = createCombiner.apply(record._2());
-        shuffleBlockInfos = bufferManager.addRecord(partition, record._1(), c);
-      } else {
-        shuffleBlockInfos = bufferManager.addRecord(partition, record._1(), record._2());
+
+      try {
+        // Task should fast fail when sending data failed
+        checkIfBlocksFailed();
+
+        K key = record._1();
+        int partition = getPartition(key);
+        if (isCombine) {
+          Object c = createCombiner.apply(record._2());
+          shuffleBlockInfos = bufferManager.addRecord(partition, record._1(), c);
+        } else {
+          shuffleBlockInfos = bufferManager.addRecord(partition, record._1(), record._2());
+        }
+        if (shuffleBlockInfos != null && !shuffleBlockInfos.isEmpty()) {
+          processShuffleBlockInfos(shuffleBlockInfos);
+        }
+      } catch (RssException e) {
+        reportTaskFailure(e);
+        throw e;
       }
+    }
+
+    try {
+      final long start = System.currentTimeMillis();
+      shuffleBlockInfos = bufferManager.clear();
       if (shuffleBlockInfos != null && !shuffleBlockInfos.isEmpty()) {
         processShuffleBlockInfos(shuffleBlockInfos);
       }
+      long checkStartTs = System.currentTimeMillis();
+      checkBlockSendResult(blockIds);
+      long commitStartTs = System.currentTimeMillis();
+      long checkDuration = commitStartTs - checkStartTs;
+      if (!isMemoryShuffleEnabled) {
+        sendCommit();
+      }
+      long writeDurationMs = bufferManager.getWriteTime() + (System.currentTimeMillis() - start);
+      shuffleWriteMetrics.incWriteTime(TimeUnit.MILLISECONDS.toNanos(writeDurationMs));
+      LOG.info(
+          "Finish write shuffle for appId["
+              + appId
+              + "], shuffleId["
+              + shuffleId
+              + "], taskId["
+              + taskId
+              + "] with write "
+              + writeDurationMs
+              + " ms, include checkSendResult["
+              + checkDuration
+              + "], commit["
+              + (System.currentTimeMillis() - commitStartTs)
+              + "], "
+              + bufferManager.getManagerCostInfo());
+    } catch (RssException e) {
+      reportTaskFailure(e);
+      throw e;
     }
-    final long start = System.currentTimeMillis();
-    shuffleBlockInfos = bufferManager.clear();
-    if (shuffleBlockInfos != null && !shuffleBlockInfos.isEmpty()) {
-      processShuffleBlockInfos(shuffleBlockInfos);
+  }
+
+  private void reportTaskFailure(Exception exception) {
+    if (RssSparkConfig.toRssConf(SparkEnv.get().conf()).getBoolean(RSS_TASK_FAILED_CALLBACK_ENABLED)) {
+      List<CoordinatorClient> coordinatorClients = null;
+      try {
+        // callback to coordinator side
+        coordinatorClients =
+            RssSparkShuffleUtils.createCoordinatorClients(SparkEnv.get().conf());
+        RssReportTaskFailedRequest request = new RssReportTaskFailedRequest(
+            appId, shuffleId, taskId, taskAttemptId, Optional.ofNullable(
+            String.format("%s:%s", exception.getClass().getSimpleName(), exception.getMessage())
+        ).orElse("EMPTY MSG")
+        );
+        for (CoordinatorClient client : coordinatorClients) {
+          RssReportTaskFailedResponse response = client.reportTaskFailed(request);
+          if (response.getStatusCode() == StatusCode.SUCCESS) {
+            break;
+          }
+        }
+      } catch (Exception e) {
+        LOG.warn("Errors on callback to coordinator.", e);
+      } finally {
+        try {
+          if (coordinatorClients != null) {
+            for (CoordinatorClient client : coordinatorClients) {
+              client.close();
+            }
+          }
+        } catch (Exception clearException) {
+          // ignore
+        }
+      }
     }
-    long checkStartTs = System.currentTimeMillis();
-    checkBlockSendResult(blockIds);
-    long commitStartTs = System.currentTimeMillis();
-    long checkDuration = commitStartTs - checkStartTs;
-    if (!isMemoryShuffleEnabled) {
-      sendCommit();
-    }
-    long writeDurationMs = bufferManager.getWriteTime() + (System.currentTimeMillis() - start);
-    shuffleWriteMetrics.incWriteTime(TimeUnit.MILLISECONDS.toNanos(writeDurationMs));
-    LOG.info(
-        "Finish write shuffle for appId["
-            + appId
-            + "], shuffleId["
-            + shuffleId
-            + "], taskId["
-            + taskId
-            + "] with write "
-            + writeDurationMs
-            + " ms, include checkSendResult["
-            + checkDuration
-            + "], commit["
-            + (System.currentTimeMillis() - commitStartTs)
-            + "], "
-            + bufferManager.getManagerCostInfo());
   }
 
   // only push-based shuffle use this interface, but rss won't be used when push-based shuffle is
