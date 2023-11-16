@@ -52,6 +52,7 @@ import org.apache.commons.collections.CollectionUtils;
 import org.apache.spark.Partitioner;
 import org.apache.spark.ShuffleDependency;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkEnv;
 import org.apache.spark.TaskContext;
 import org.apache.spark.executor.ShuffleWriteMetrics;
 import org.apache.spark.scheduler.MapStatus;
@@ -64,6 +65,9 @@ import org.apache.spark.shuffle.ShuffleWriter;
 import org.apache.spark.shuffle.handle.MutableShuffleHandleInfo;
 import org.apache.spark.shuffle.handle.ShuffleHandleInfo;
 import org.apache.spark.storage.BlockManagerId;
+import org.apache.uniffle.client.api.CoordinatorClient;
+import org.apache.uniffle.client.request.RssReportTaskFailedRequest;
+import org.apache.uniffle.client.response.RssReportTaskFailedResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,6 +95,7 @@ import org.apache.uniffle.common.rpc.StatusCode;
 import org.apache.uniffle.storage.util.StorageType;
 
 import static org.apache.spark.shuffle.RssSparkConfig.RSS_PARTITION_REASSIGN_BLOCK_RETRY_MAX_TIMES;
+import static org.apache.spark.shuffle.RssSparkConfig.RSS_TASK_FAILED_CALLBACK_ENABLED;
 
 public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
 
@@ -271,11 +276,48 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
     try {
       writeImpl(records);
     } catch (Exception e) {
+      if (e instanceof RssException) {
+        reportTaskFailure(e);
+      }
       taskFailureCallback.apply(taskId);
       if (shuffleManager.isRssResubmitStage()) {
         throwFetchFailedIfNecessary(e);
       } else {
         throw e;
+      }
+    }
+  }
+
+  private void reportTaskFailure(Exception exception) {
+    if (RssSparkConfig.toRssConf(SparkEnv.get().conf()).getBoolean(RSS_TASK_FAILED_CALLBACK_ENABLED)) {
+      List<CoordinatorClient> coordinatorClients = null;
+      try {
+        // callback to coordinator side
+        coordinatorClients =
+            RssSparkShuffleUtils.createCoordinatorClients(SparkEnv.get().conf());
+        RssReportTaskFailedRequest request = new RssReportTaskFailedRequest(
+            appId, shuffleId, taskId, taskAttemptId, Optional.ofNullable(
+            String.format("%s:%s", exception.getClass().getSimpleName(), exception.getMessage())
+        ).orElse("EMPTY MSG")
+        );
+        for (CoordinatorClient client : coordinatorClients) {
+          RssReportTaskFailedResponse response = client.reportTaskFailed(request);
+          if (response.getStatusCode() == StatusCode.SUCCESS) {
+            break;
+          }
+        }
+      } catch (Exception e) {
+        LOG.warn("Errors on callback to coordinator.", e);
+      } finally {
+        try {
+          if (coordinatorClients != null) {
+            for (CoordinatorClient client : coordinatorClients) {
+              client.close();
+            }
+          }
+        } catch (Exception clearException) {
+          // ignore
+        }
       }
     }
   }
@@ -855,3 +897,4 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
     return taskAttemptAssignment;
   }
 }
+

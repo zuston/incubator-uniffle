@@ -370,6 +370,9 @@ service CoordinatorServer {
 
   // Get remote storage from coordinator
   rpc fetchRemoteStorage(FetchRemoteStorageRequest) returns (FetchRemoteStorageResponse);
+
+  // Report tasks failed to coordinator server
+  rpc reportTaskFailed(ReportTaskFailedRequest) returns (ReportTaskFailedResponse);
 }
 
 message AppHeartBeatRequest {
@@ -625,3 +628,14 @@ message RssReassignOnBlockSendFailureResponse {
 }
 
 
+message ReportTaskFailedRequest {
+  string appId = 1;
+  int32 shuffleId = 2;
+  string taskId = 3;
+  int64 taskAttemptId = 4;
+  string exceptionMessage = 5;
+}
+
+message ReportTaskFailedResponse {
+  StatusCode status = 1;
+}

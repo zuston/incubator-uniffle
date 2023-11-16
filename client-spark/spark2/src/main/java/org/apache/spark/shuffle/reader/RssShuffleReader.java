@@ -33,11 +33,13 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.Aggregator;
 import org.apache.spark.InterruptibleIterator;
 import org.apache.spark.ShuffleDependency;
+import org.apache.spark.SparkEnv;
 import org.apache.spark.TaskContext;
 import org.apache.spark.executor.ShuffleReadMetrics;
 import org.apache.spark.executor.TempShuffleReadMetrics;
 import org.apache.spark.serializer.Serializer;
 import org.apache.spark.shuffle.RssShuffleHandle;
+import org.apache.spark.shuffle.RssSparkShuffleUtils;
 import org.apache.spark.shuffle.ShuffleReader;
 import org.apache.spark.util.CompletionIterator;
 import org.apache.spark.util.CompletionIterator$;
@@ -47,12 +49,19 @@ import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.uniffle.client.api.CoordinatorClient;
 import org.apache.uniffle.client.api.ShuffleReadClient;
 import org.apache.uniffle.client.factory.ShuffleClientFactory;
+import org.apache.uniffle.client.request.RssReportTaskFailedRequest;
+import org.apache.uniffle.client.response.RssReportTaskFailedResponse;
 import org.apache.uniffle.client.util.RssClientConfig;
 import org.apache.uniffle.common.ShuffleServerInfo;
 import org.apache.uniffle.common.config.RssClientConf;
 import org.apache.uniffle.common.config.RssConf;
+import org.apache.uniffle.common.exception.RssException;
+import org.apache.uniffle.common.rpc.StatusCode;
+
+import static org.apache.spark.shuffle.RssSparkConfig.RSS_TASK_FAILED_CALLBACK_ENABLED;
 
 public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
 
@@ -75,6 +84,7 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
   private List<ShuffleServerInfo> shuffleServerInfoList;
   private Configuration hadoopConf;
   private RssConf rssConf;
+  private boolean isFailureCallbackEnabled;
 
   public RssShuffleReader(
       int startPartition,
@@ -106,6 +116,52 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
     this.shuffleServerInfoList = (List<ShuffleServerInfo>) (partitionToServers.get(startPartition));
     this.rssConf = rssConf;
     expectedTaskIdsBitmapFilterEnable = shuffleServerInfoList.size() > 1;
+    this.isFailureCallbackEnabled = rssConf.get(RSS_TASK_FAILED_CALLBACK_ENABLED);
+  }
+
+  class RssShuffleDataIteratorWrapper<K, C> extends RssShuffleDataIterator<K, C> {
+
+    public RssShuffleDataIteratorWrapper(Serializer serializer, ShuffleReadClient shuffleReadClient,
+        ShuffleReadMetrics shuffleReadMetrics, RssConf rssConf) {
+      super(serializer, shuffleReadClient, shuffleReadMetrics, rssConf);
+    }
+
+    @Override
+    public boolean hasNext() {
+      try {
+        return super.hasNext();
+      } catch (RssException e) {
+        if (isFailureCallbackEnabled) {
+          List<CoordinatorClient> coordinatorClients = null;
+          try {
+            // callback to coordinator side
+            coordinatorClients = RssSparkShuffleUtils.createCoordinatorClients(SparkEnv.get().conf());
+            RssReportTaskFailedRequest request = new RssReportTaskFailedRequest(
+                appId, shuffleId, taskId, -1, e.getMessage()
+            );
+            for (CoordinatorClient client : coordinatorClients) {
+              RssReportTaskFailedResponse response = client.reportTaskFailed(request);
+              if (response.getStatusCode() == StatusCode.SUCCESS) {
+                break;
+              }
+            }
+          } catch (Exception exception) {
+            LOG.warn("Errors on callback to coordinator. Ignore this!", exception);
+          } finally {
+            try {
+              if (coordinatorClients != null) {
+                for (CoordinatorClient client : coordinatorClients) {
+                  client.close();
+                }
+              }
+            } catch (Exception finallyException) {
+              // ignore
+            }
+          }
+        }
+        throw e;
+      }
+    }
   }
 
   @Override
@@ -138,7 +194,7 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
                     .retryIntervalMax(retryIntervalMax)
                     .rssConf(rssConf));
     RssShuffleDataIterator rssShuffleDataIterator =
-        new RssShuffleDataIterator<K, C>(
+        new RssShuffleDataIteratorWrapper<K, C>(
             shuffleDependency.serializer(),
             shuffleReadClient,
             new ReadMetrics(context.taskMetrics().createTempShuffleReadMetrics()),

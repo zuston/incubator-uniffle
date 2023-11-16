@@ -58,6 +58,11 @@ public class CoordinatorMetrics {
   public static Counter counterTotalLoadDeniedRequest;
   public static final Map<String, Gauge> GAUGE_USED_REMOTE_STORAGE = JavaUtils.newConcurrentMap();
 
+  private static final String TOTAL_FAILED_TASK_REPORT_NUM = "total_failed_task_report_num";
+  private static final String TOTAL_FAILED_TASK_WITH_APP_NUM = "total_app_with_failed_task_num";
+  public static Counter counterTotalFailedTaskReportNum;
+  public static Counter counterTotalAppWithFailedTasksNum;
+
   private static MetricsManager metricsManager;
   private static boolean isRegister = false;
 
@@ -120,5 +125,8 @@ public class CoordinatorMetrics {
     counterTotalLoadDeniedRequest = metricsManager.addCounter(TOTAL_LOAD_DENIED_REQUEST);
 
     counterTotalQiyiAccessCheckerDeniedRequest = metricsManager.addCounter(TOTAL_QIYI_ACCESS_CHECKER_DENIED_REQUEST);
+
+    counterTotalFailedTaskReportNum = metricsManager.addCounter(TOTAL_FAILED_TASK_REPORT_NUM);
+    counterTotalAppWithFailedTasksNum = metricsManager.addCounter(TOTAL_FAILED_TASK_WITH_APP_NUM);
   }
 }

@@ -19,6 +19,7 @@ package org.apache.spark.shuffle.reader;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import scala.Function0;
 import scala.Function1;
@@ -36,10 +37,13 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.Aggregator;
 import org.apache.spark.InterruptibleIterator;
 import org.apache.spark.ShuffleDependency;
+import org.apache.spark.SparkEnv;
 import org.apache.spark.TaskContext;
 import org.apache.spark.executor.ShuffleReadMetrics;
 import org.apache.spark.serializer.Serializer;
 import org.apache.spark.shuffle.RssShuffleHandle;
+import org.apache.spark.shuffle.RssSparkConfig;
+import org.apache.spark.shuffle.RssSparkShuffleUtils;
 import org.apache.spark.shuffle.ShuffleReader;
 import org.apache.spark.util.CompletionIterator;
 import org.apache.spark.util.CompletionIterator$;
@@ -48,14 +52,20 @@ import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.uniffle.client.api.CoordinatorClient;
 import org.apache.uniffle.client.api.ShuffleReadClient;
 import org.apache.uniffle.client.factory.ShuffleClientFactory;
+import org.apache.uniffle.client.request.RssReportTaskFailedRequest;
+import org.apache.uniffle.client.response.RssReportTaskFailedResponse;
 import org.apache.uniffle.client.util.RssClientConfig;
 import org.apache.uniffle.common.ShuffleDataDistributionType;
 import org.apache.uniffle.common.ShuffleServerInfo;
 import org.apache.uniffle.common.config.RssClientConf;
 import org.apache.uniffle.common.config.RssConf;
+import org.apache.uniffle.common.exception.RssException;
+import org.apache.uniffle.common.rpc.StatusCode;
 
+import static org.apache.spark.shuffle.RssSparkConfig.RSS_TASK_FAILED_CALLBACK_ENABLED;
 import static org.apache.uniffle.common.util.Constants.DRIVER_HOST;
 
 public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
@@ -306,17 +316,53 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
 
     @Override
     public boolean hasNext() {
-      if (dataIterator == null) {
-        return false;
-      }
-      while (!dataIterator.hasNext()) {
-        if (!iterator.hasNext()) {
+      try {
+        if (dataIterator == null) {
           return false;
         }
-        dataIterator = iterator.next();
-        iterator.remove();
+        while (!dataIterator.hasNext()) {
+          if (!iterator.hasNext()) {
+            return false;
+          }
+          dataIterator = iterator.next();
+          iterator.remove();
+        }
+        return dataIterator.hasNext();
+      } catch (RssException e) {
+        reportTaskFailure(e);
+        throw e;
       }
-      return dataIterator.hasNext();
+    }
+
+    private void reportTaskFailure(Exception e) {
+      if (RssSparkConfig.toRssConf(SparkEnv.get().conf()).getBoolean(RSS_TASK_FAILED_CALLBACK_ENABLED)) {
+        List<CoordinatorClient> coordinatorClients = null;
+        try {
+          coordinatorClients =
+              RssSparkShuffleUtils.createCoordinatorClients(SparkEnv.get().conf());
+          RssReportTaskFailedRequest request = new RssReportTaskFailedRequest(
+              appId, shuffleId, taskId, 1L, Optional.ofNullable(e.getMessage()).orElse("EMPTY MSG")
+          );
+          for (CoordinatorClient client : coordinatorClients) {
+            RssReportTaskFailedResponse response = client.reportTaskFailed(request);
+            if (response.getStatusCode() == StatusCode.SUCCESS) {
+              break;
+            }
+          }
+        } catch (Exception exception) {
+          LOG.warn("Errors on callback to coordinator.", exception);
+        } finally {
+          try {
+             if (coordinatorClients != null) {
+               for (CoordinatorClient client : coordinatorClients) {
+                 client.close();
+               }
+             }
+          } catch (Exception finallyException) {
+            // ignore
+          }
+        }
+      }
     }
 
     @Override

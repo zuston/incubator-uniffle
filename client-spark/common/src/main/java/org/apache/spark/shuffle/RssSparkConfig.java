@@ -43,6 +43,10 @@ public class RssSparkConfig {
           .defaultValue(false)
           .withDescription(
               "Whether to enable the blockId self management in spark driver side. Default value is false.");
+  public static final ConfigOption<Boolean> RSS_TASK_FAILED_CALLBACK_ENABLED =
+      ConfigOptions.key("rss.task.failed.callback.enable")
+          .booleanType()
+          .defaultValue(true);
 
   public static final ConfigOption<Long> RSS_CLIENT_SEND_SIZE_LIMITATION =
       ConfigOptions.key("rss.client.send.size.limit")
