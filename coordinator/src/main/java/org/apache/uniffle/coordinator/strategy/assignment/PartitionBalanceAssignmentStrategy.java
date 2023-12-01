@@ -169,9 +169,9 @@ public class PartitionBalanceAssignmentStrategy extends AbstractAssignmentStrate
     return serverToPartitions;
   }
 
-  static class PartitionAssignmentInfo {
+  public static class PartitionAssignmentInfo {
 
-    PartitionAssignmentInfo() {
+    public PartitionAssignmentInfo() {
       partitionNum = 0;
       timestamp = System.currentTimeMillis();
     }

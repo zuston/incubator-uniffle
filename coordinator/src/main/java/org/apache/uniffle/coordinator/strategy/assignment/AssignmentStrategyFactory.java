@@ -36,6 +36,8 @@ public class AssignmentStrategyFactory {
       return new BasicAssignmentStrategy(clusterManager, conf);
     } else if (StrategyName.PARTITION_BALANCE == strategy) {
       return new PartitionBalanceAssignmentStrategy(clusterManager, conf);
+    } else if (StrategyName.QIYI == strategy) {
+      return new QiyiAssignmentStrategy(clusterManager, conf);
     } else {
       throw new UnsupportedOperationException("Unsupported assignment strategy.");
     }
@@ -43,6 +45,7 @@ public class AssignmentStrategyFactory {
 
   public enum StrategyName {
     BASIC,
-    PARTITION_BALANCE
+    PARTITION_BALANCE,
+    QIYI
   }
 }
