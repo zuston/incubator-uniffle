@@ -15,11 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.uniffle.common.netty.protocol;
+package org.apache.uniffle.coordinator.conf;
 
-import io.netty.channel.Channel;
+import java.io.InputStream;
 
-public interface Transferable {
+public interface ClientConfParser {
+  enum Parser {
+    YAML,
+    LEGACY,
+    MIXED
+  }
 
-  void transferTo(Channel channel);
+  ClientConf tryParse(InputStream fileInputStream) throws Exception;
 }
