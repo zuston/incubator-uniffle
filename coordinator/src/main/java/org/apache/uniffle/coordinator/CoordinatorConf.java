@@ -266,4 +266,10 @@ public class CoordinatorConf extends RssBaseConf {
       .stringType()
       .noDefaultValue()
       .withDescription("");
+
+  public static final ConfigOption<String> COORDINATOR_QIYI_ASSIGNMENT_MEMORY_WEIGHT_CONF = ConfigOptions
+      .key("rss.coordinator.qiyi.assignment.free-memory-factor-weight.conf")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("140-300:0.2");
 }
