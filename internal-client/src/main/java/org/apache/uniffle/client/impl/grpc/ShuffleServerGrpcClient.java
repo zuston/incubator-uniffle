@@ -106,7 +106,7 @@ public class ShuffleServerGrpcClient extends GrpcClient implements ShuffleServer
 
   private static final Logger LOG = LoggerFactory.getLogger(ShuffleServerGrpcClient.class);
   protected static final long FAILED_REQUIRE_ID = -1;
-  protected static final long RPC_TIMEOUT_DEFAULT_MS = 60000;
+  protected static final long RPC_TIMEOUT_DEFAULT_MS = 180000;
   private long rpcTimeout = RPC_TIMEOUT_DEFAULT_MS;
   private ShuffleServerBlockingStub blockingStub;
 
