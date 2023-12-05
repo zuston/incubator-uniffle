@@ -213,26 +213,6 @@ SPARK_CLIENT3_JAR="${RSS_HOME}/client-spark/spark3-shaded/target/rss-client-spar
 echo "copy $SPARK_CLIENT3_JAR to ${SPARK_CLIENT3_JAR_DIR}"
 cp $SPARK_CLIENT3_JAR $SPARK_CLIENT3_JAR_DIR
 
-BUILD_COMMAND_MR=("$MVN" clean package -Pmr,$HADOOP_PROFILE_ID -pl client-mr/core -DskipTests -am $@)
-echo -e "\nBuilding with..."
-echo -e "\$ ${BUILD_COMMAND_MR[@]}\n"
-"${BUILD_COMMAND_MR[@]}"
-MR_CLIENT_JAR_DIR="${CLIENT_JAR_DIR}/mr"
-mkdir -p $MR_CLIENT_JAR_DIR
-MR_CLIENT_JAR="${RSS_HOME}/client-mr/core/target/shaded/rss-client-mr-${VERSION}-shaded.jar"
-echo "copy $MR_CLIENT_JAR to ${MR_CLIENT_JAR_DIR}"
-cp $MR_CLIENT_JAR $MR_CLIENT_JAR_DIR
-
-BUILD_COMMAND_TEZ=("$MVN" clean package -Ptez,$HADOOP_PROFILE_ID -pl client-tez -DskipTests -am $@)
-echo -e "\nBuilding with..."
-echo -e "\$ ${BUILD_COMMAND_TEZ[@]}\n"
-"${BUILD_COMMAND_TEZ[@]}"
-TEZ_CLIENT_JAR_DIR="${CLIENT_JAR_DIR}/tez"
-mkdir -p $TEZ_CLIENT_JAR_DIR
-TEZ_CLIENT_JAR="${RSS_HOME}/client-tez/target/shaded/rss-client-tez-${VERSION}-shaded.jar"
-echo "copy $TEZ_CLIENT_JAR to ${TEZ_CLIENT_JAR_DIR}"
-cp $TEZ_CLIENT_JAR $TEZ_CLIENT_JAR_DIR
-
 cp -r bin $DISTDIR
 cp -r conf $DISTDIR
 
