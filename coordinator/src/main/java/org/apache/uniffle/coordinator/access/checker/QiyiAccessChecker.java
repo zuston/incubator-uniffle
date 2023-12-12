@@ -108,6 +108,7 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
     updateBlacklistScheduler = Executors.newSingleThreadScheduledExecutor(
         ThreadUtils.getThreadFactory("Update-black-list-%d")
     );
+
     updateBlacklistScheduler.scheduleAtFixedRate(
         () -> {
           try {
@@ -145,7 +146,7 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
     LOGGER.info("Initialized white list info: {}", whiteListInfo);
 
     updateWhitelistScheduler = Executors.newSingleThreadScheduledExecutor(
-        ThreadUtils.getThreadFactory("Update-white-list-%d")
+        ThreadUtils.getThreadFactory("Update-whitelist")
     );
     updateWhitelistScheduler.scheduleAtFixedRate(
         () -> {
