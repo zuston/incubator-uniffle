@@ -31,8 +31,8 @@ public final class Constants {
   // the length of them are ATOMIC_INT_MAX_LENGTH + PARTITION_ID_MAX_LENGTH +
   // TASK_ATTEMPT_ID_MAX_LENGTH = 63
   public static final int PARTITION_ID_MAX_LENGTH = 24;
-  public static final int TASK_ATTEMPT_ID_MAX_LENGTH = 21;
-  public static final int ATOMIC_INT_MAX_LENGTH = 18;
+  public static final int TASK_ATTEMPT_ID_MAX_LENGTH = 23;
+  public static final int ATOMIC_INT_MAX_LENGTH = 16;
   public static final long MAX_SEQUENCE_NO = (1 << Constants.ATOMIC_INT_MAX_LENGTH) - 1;
   public static final long MAX_PARTITION_ID = (1 << Constants.PARTITION_ID_MAX_LENGTH) - 1;
   public static final long MAX_TASK_ATTEMPT_ID = (1 << Constants.TASK_ATTEMPT_ID_MAX_LENGTH) - 1;
