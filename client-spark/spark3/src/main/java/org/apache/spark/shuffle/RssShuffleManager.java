@@ -143,6 +143,8 @@ public class RssShuffleManager extends RssShuffleManagerBase {
    */
   private Map<String, Boolean> serverAssignedInfos;
 
+  private boolean useCompatibleMode = false;
+
   public RssShuffleManager(SparkConf conf, boolean isDriver) {
     this.sparkConf = conf;
     boolean supportsRelocation =
@@ -271,6 +273,7 @@ public class RssShuffleManager extends RssShuffleManagerBase {
     this.shuffleIdToShuffleHandleInfo = JavaUtils.newConcurrentMap();
     this.failuresShuffleServerIds = Sets.newHashSet();
     this.serverAssignedInfos = JavaUtils.newConcurrentMap();
+    this.useCompatibleMode = RssSparkConfig.toRssConf(sparkConf).getBoolean("rss.use.compatibleMode", false);
   }
 
   public CompletableFuture<Long> sendData(AddBlockEvent event) {
@@ -417,8 +420,10 @@ public class RssShuffleManager extends RssShuffleManagerBase {
             id.get(), defaultRemoteStorage, dynamicConfEnabled, storageType, shuffleWriteClient);
 
     Set<String> assignmentTags = RssSparkShuffleUtils.getAssignmentTags(sparkConf);
-    ClientUtils.validateClientType(clientType);
-    assignmentTags.add(clientType);
+    if (!useCompatibleMode) {
+      ClientUtils.validateClientType(clientType);
+      assignmentTags.add(clientType);
+    }
 
     int requiredShuffleServerNumber =
         RssSparkShuffleUtils.getRequiredShuffleServerNumber(sparkConf);
@@ -636,20 +641,35 @@ public class RssShuffleManager extends RssShuffleManagerBase {
     }
     Map<Integer, List<ShuffleServerInfo>> allPartitionToServers =
         shuffleHandleInfo.getPartitionToServers();
-    Map<Integer, List<ShuffleServerInfo>> requirePartitionToServers =
-        allPartitionToServers.entrySet().stream()
-            .filter(x -> x.getKey() >= startPartition && x.getKey() < endPartition)
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    Map<ShuffleServerInfo, Set<Integer>> serverToPartitions =
-        RssUtils.generateServerToPartitions(requirePartitionToServers);
+
     long start = System.currentTimeMillis();
-    Roaring64NavigableMap blockIdBitmap =
-        getShuffleResultForMultiPart(
-            clientType,
-            serverToPartitions,
-            rssShuffleHandle.getAppId(),
-            shuffleId,
-            context.stageAttemptNumber());
+    Roaring64NavigableMap blockIdBitmap = null;
+    // to be compatible with the older version uniffle cluster
+    if (useCompatibleMode) {
+      blockIdBitmap =
+              getShuffleResultSinglePart(
+                      clientType,
+                      Sets.newHashSet(allPartitionToServers.get(startPartition)),
+                      rssShuffleHandle.getAppId(),
+                      shuffleId,
+                      startPartition,
+                      context.stageAttemptNumber());
+    } else {
+      Map<Integer, List<ShuffleServerInfo>> requirePartitionToServers =
+              allPartitionToServers.entrySet().stream()
+                      .filter(x -> x.getKey() >= startPartition && x.getKey() < endPartition)
+                      .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+      Map<ShuffleServerInfo, Set<Integer>> serverToPartitions =
+              RssUtils.generateServerToPartitions(requirePartitionToServers);
+      blockIdBitmap =
+              getShuffleResultForMultiPart(
+                      clientType,
+                      serverToPartitions,
+                      rssShuffleHandle.getAppId(),
+                      shuffleId,
+                      context.stageAttemptNumber());
+    }
+
     LOG.info(
         "Get shuffle blockId cost "
             + (System.currentTimeMillis() - start)
@@ -658,7 +678,7 @@ public class RssShuffleManager extends RssShuffleManagerBase {
             + " blockIds for shuffleId["
             + shuffleId
             + "], startPartition["
-            + start
+            + startPartition
             + "], endPartition["
             + endPartition
             + "]");
@@ -692,6 +712,22 @@ public class RssShuffleManager extends RssShuffleManagerBase {
         RssSparkConfig.toRssConf(sparkConf),
         dataDistributionType,
         allPartitionToServers);
+  }
+
+  private Roaring64NavigableMap getShuffleResultSinglePart(
+          String clientType,
+          Set<ShuffleServerInfo> shuffleServerInfoSet,
+          String appId,
+          int shuffleId,
+          int partitionId,
+          int stageAttemptId) {
+    try {
+      return shuffleWriteClient.getShuffleResult(
+              clientType, shuffleServerInfoSet, appId, shuffleId, partitionId);
+    } catch (RssFetchFailedException e) {
+      throw RssSparkShuffleUtils.reportRssFetchFailedException(
+              e, sparkConf, appId, shuffleId, stageAttemptId, Sets.newHashSet(partitionId));
+    }
   }
 
   @SuppressFBWarnings("REC_CATCH_EXCEPTION")
