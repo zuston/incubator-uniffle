@@ -319,7 +319,14 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
         if (StringUtils.isNotEmpty(gearCoIdString)) {
           coId = gearCoIdString.split("@", 2)[0];
         }
-        isRetry = false;
+
+        String rawIsRetry = kvs.getOrDefault("gear.workflow.action.isRetry", "false");
+        try {
+          isRetry = Boolean.valueOf(rawIsRetry);
+        } catch (Exception e) {
+          LOGGER.error("Converting isRetry.", e);
+          isRetry = false;
+        }
       } else {
         // To be compatible with older version of Pilot.
         /**
