@@ -206,11 +206,13 @@ public class LocalStorageChecker extends Checker {
         if (Double.compare(usagePercent, diskMaxUsagePercentage) >= 0) {
           isHealthy = false;
           LOG.info("storage {} become unhealthy", storageDir.getAbsolutePath());
+          ShuffleServerMetrics.gaugeLocalStorageIsHealthy.labels(storageDir.getAbsolutePath()).set(1);
         }
       } else {
         if (Double.compare(usagePercent, diskRecoveryUsagePercentage) <= 0) {
           isHealthy = true;
           LOG.info("storage {} become healthy", storageDir.getAbsolutePath());
+          ShuffleServerMetrics.gaugeLocalStorageIsHealthy.labels(storageDir.getAbsolutePath()).set(0);
         }
       }
       return isHealthy;
@@ -271,6 +273,7 @@ public class LocalStorageChecker extends Checker {
     }
 
     public void markCorrupted() {
+      ShuffleServerMetrics.gaugeLocalStorageIsHealthy.labels(storageDir.getAbsolutePath()).set(1);
       storage.markCorrupted();
     }
   }
