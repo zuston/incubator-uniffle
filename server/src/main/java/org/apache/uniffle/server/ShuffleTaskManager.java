@@ -86,6 +86,7 @@ public class ShuffleTaskManager {
   private final ScheduledExecutorService expiredAppCleanupExecutorService;
   private final ScheduledExecutorService leakShuffleDataCheckExecutorService;
   private ScheduledExecutorService triggerFlushExecutorService;
+  private final TopNShuffleDataSizeOfAppCalcTask topNShuffleDataSizeOfAppCalcTask;
   private final StorageManager storageManager;
   private AtomicLong requireBufferId = new AtomicLong(0);
   private ShuffleServerConf conf;
@@ -200,6 +201,9 @@ public class ShuffleTaskManager {
     clearResourceThread = new Thread(clearResourceRunnable);
     clearResourceThread.setName("clearResourceThread");
     clearResourceThread.setDaemon(true);
+
+    topNShuffleDataSizeOfAppCalcTask = new TopNShuffleDataSizeOfAppCalcTask(this, conf);
+    topNShuffleDataSizeOfAppCalcTask.start();
   }
 
   private Lock getAppLock(String appId) {
@@ -826,6 +830,14 @@ public class ShuffleTaskManager {
     synchronized (this.shuffleBufferManager) {
       this.shuffleBufferManager.flushIfNecessary();
     }
+  }
+
+  public Map<String, ShuffleTaskInfo> getShuffleTaskInfos() {
+    return shuffleTaskInfos;
+  }
+
+  public void stop() {
+    topNShuffleDataSizeOfAppCalcTask.stop();
   }
 
   public void start() {

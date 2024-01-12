@@ -114,6 +114,13 @@ public class ShuffleServerMetrics {
       "total_remove_resource_by_shuffle_ids_time";
 
   public static Gauge gaugeLocalStorageIsHealthy;
+  public static final String TOPN_OF_TOTAL_DATA_SIZE_FOR_APP = "topN_of_total_data_size_for_app";
+  public static final String TOPN_OF_IN_MEMORY_DATA_SIZE_FOR_APP =
+      "topN_of_in_memory_data_size_for_app";
+  public static final String TOPN_OF_ON_LOCALFILE_DATA_SIZE_FOR_APP =
+      "topN_of_on_localfile_data_size_for_app";
+  public static final String TOPN_OF_ON_HADOOP_DATA_SIZE_FOR_APP =
+      "topN_of_on_hadoop_data_size_for_app";
 
   public static Counter.Child counterTotalAppNum;
   public static Counter.Child counterTotalAppWithHugePartitionNum;
@@ -173,6 +180,11 @@ public class ShuffleServerMetrics {
   public static Gauge.Child gaugeEventQueueSize;
   public static Gauge.Child gaugeAppNum;
   public static Gauge.Child gaugeTotalPartitionNum;
+
+  public static Gauge gaugeTotalDataSizeUsage;
+  public static Gauge gaugeInMemoryDataSizeUsage;
+  public static Gauge gaugeOnDiskDataSizeUsage;
+  public static Gauge gaugeOnHadoopDataSizeUsage;
 
   public static Counter counterRemoteStorageTotalWrite;
   public static Counter counterRemoteStorageRetryWrite;
@@ -351,5 +363,33 @@ public class ShuffleServerMetrics {
         metricsManager.addSummary(TOTAL_REMOVE_RESOURCE_BY_SHUFFLE_IDS_TIME);
 
     gaugeLocalStorageIsHealthy = metricsManager.addGauge(LOCAL_STORAGE_IS_HEALTHY, LOCAL_DISK_PATH_LABEL);
+
+    gaugeTotalDataSizeUsage =
+        Gauge.build()
+            .name(TOPN_OF_TOTAL_DATA_SIZE_FOR_APP)
+            .help("top N of total shuffle data size for app level")
+            .labelNames("app_id")
+            .register(metricsManager.getCollectorRegistry());
+
+    gaugeInMemoryDataSizeUsage =
+        Gauge.build()
+            .name(TOPN_OF_IN_MEMORY_DATA_SIZE_FOR_APP)
+            .help("top N of in memory shuffle data size for app level")
+            .labelNames("app_id")
+            .register(metricsManager.getCollectorRegistry());
+
+    gaugeOnDiskDataSizeUsage =
+        Gauge.build()
+            .name(TOPN_OF_ON_LOCALFILE_DATA_SIZE_FOR_APP)
+            .help("top N of on disk shuffle data size for app level")
+            .labelNames("app_id")
+            .register(metricsManager.getCollectorRegistry());
+
+    gaugeOnHadoopDataSizeUsage =
+        Gauge.build()
+            .name(TOPN_OF_ON_HADOOP_DATA_SIZE_FOR_APP)
+            .help("top N of on hadoop shuffle data size for app level")
+            .labelNames("app_id")
+            .register(metricsManager.getCollectorRegistry());
   }
 }
