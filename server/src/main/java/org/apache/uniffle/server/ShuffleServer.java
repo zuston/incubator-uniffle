@@ -193,6 +193,9 @@ public class ShuffleServer {
     if (executorService != null) {
       executorService.shutdownNow();
     }
+    if (shuffleTaskManager != null) {
+      shuffleTaskManager.stop();
+    }
     running = false;
     LOG.info("RPC Server Stopped!");
   }
@@ -270,6 +273,7 @@ public class ShuffleServer {
     shuffleTaskManager =
         new ShuffleTaskManager(
             shuffleServerConf, shuffleFlushManager, shuffleBufferManager, storageManager);
+    shuffleTaskManager.start();
 
     nettyServerEnabled = shuffleServerConf.get(ShuffleServerConf.NETTY_SERVER_PORT) >= 0;
     if (nettyServerEnabled) {
