@@ -207,12 +207,16 @@ public class LocalStorageChecker extends Checker {
           isHealthy = false;
           LOG.info("storage {} become unhealthy", storageDir.getAbsolutePath());
           ShuffleServerMetrics.gaugeLocalStorageIsHealthy.labels(storageDir.getAbsolutePath()).set(1);
+        } else {
+          ShuffleServerMetrics.gaugeLocalStorageIsHealthy.labels(storageDir.getAbsolutePath()).set(0);
         }
       } else {
         if (Double.compare(usagePercent, diskRecoveryUsagePercentage) <= 0) {
           isHealthy = true;
           LOG.info("storage {} become healthy", storageDir.getAbsolutePath());
           ShuffleServerMetrics.gaugeLocalStorageIsHealthy.labels(storageDir.getAbsolutePath()).set(0);
+        } else {
+          ShuffleServerMetrics.gaugeLocalStorageIsHealthy.labels(storageDir.getAbsolutePath()).set(1);
         }
       }
       return isHealthy;
