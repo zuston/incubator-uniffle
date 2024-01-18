@@ -447,6 +447,8 @@ public class CoordinatorGrpcService extends CoordinatorServerGrpc.CoordinatorSer
       appsWithFailedTasks = Maps.newConcurrentMap();
     }
 
+    CoordinatorMetrics.gaugeTaskFailedNum.labels(appId).inc();
+
     RssProtos.ReportTaskFailedResponse response = RssProtos.ReportTaskFailedResponse.newBuilder()
         .setStatus(StatusCode.SUCCESS)
         .build();
