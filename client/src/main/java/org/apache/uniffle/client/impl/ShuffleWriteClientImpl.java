@@ -24,13 +24,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -63,6 +60,7 @@ import org.apache.uniffle.client.request.RssRegisterShuffleRequest;
 import org.apache.uniffle.client.request.RssReportShuffleResultRequest;
 import org.apache.uniffle.client.request.RssSendCommitRequest;
 import org.apache.uniffle.client.request.RssSendShuffleDataRequest;
+import org.apache.uniffle.client.request.RssUnregisterShuffleByAppIdRequest;
 import org.apache.uniffle.client.request.RssUnregisterShuffleRequest;
 import org.apache.uniffle.client.response.ClientResponse;
 import org.apache.uniffle.client.response.RssAppHeartBeatResponse;
@@ -76,6 +74,7 @@ import org.apache.uniffle.client.response.RssRegisterShuffleResponse;
 import org.apache.uniffle.client.response.RssReportShuffleResultResponse;
 import org.apache.uniffle.client.response.RssSendCommitResponse;
 import org.apache.uniffle.client.response.RssSendShuffleDataResponse;
+import org.apache.uniffle.client.response.RssUnregisterShuffleByAppIdResponse;
 import org.apache.uniffle.client.response.RssUnregisterShuffleResponse;
 import org.apache.uniffle.client.response.SendShuffleDataResult;
 import org.apache.uniffle.client.util.ClientUtils;
@@ -862,93 +861,72 @@ public class ShuffleWriteClientImpl implements ShuffleWriteClient {
   @Override
   public void registerApplicationInfo(String appId, long timeoutMs, String user) {
     RssApplicationInfoRequest request = new RssApplicationInfoRequest(appId, timeoutMs, user);
-    List<Callable<Void>> callableList = Lists.newArrayList();
-    coordinatorClients.forEach(
+
+    ThreadUtils.executeTasks(
+        heartBeatExecutorService,
+        coordinatorClients,
         coordinatorClient -> {
-          callableList.add(
-              () -> {
-                try {
-                  RssApplicationInfoResponse response =
-                      coordinatorClient.registerApplicationInfo(request);
-                  if (response.getStatusCode() != StatusCode.SUCCESS) {
-                    LOG.error("Failed to send applicationInfo to " + coordinatorClient.getDesc());
-                  } else {
-                    LOG.info("Successfully send applicationInfo to " + coordinatorClient.getDesc());
-                  }
-                } catch (Exception e) {
-                  LOG.warn(
-                      "Error happened when send applicationInfo to " + coordinatorClient.getDesc(),
-                      e);
-                }
-                return null;
-              });
-        });
-    try {
-      List<Future<Void>> futures =
-          heartBeatExecutorService.invokeAll(callableList, timeoutMs, TimeUnit.MILLISECONDS);
-      for (Future<Void> future : futures) {
-        if (!future.isDone()) {
-          future.cancel(true);
-        }
-      }
-    } catch (InterruptedException ie) {
-      LOG.warn("register application is interrupted", ie);
-    }
+          try {
+            RssApplicationInfoResponse response =
+                coordinatorClient.registerApplicationInfo(request);
+            if (response.getStatusCode() != StatusCode.SUCCESS) {
+              LOG.error("Failed to send applicationInfo to " + coordinatorClient.getDesc());
+            } else {
+              LOG.info("Successfully send applicationInfo to " + coordinatorClient.getDesc());
+            }
+          } catch (Exception e) {
+            LOG.warn(
+                "Error happened when send applicationInfo to " + coordinatorClient.getDesc(), e);
+          }
+          return null;
+        },
+        timeoutMs,
+        "register application");
   }
 
   @Override
   public void sendAppHeartbeat(String appId, long timeoutMs) {
     RssAppHeartBeatRequest request = new RssAppHeartBeatRequest(appId, timeoutMs);
-    List<Callable<Void>> callableList = Lists.newArrayList();
     Set<ShuffleServerInfo> allShuffleServers = getAllShuffleServers(appId);
-    allShuffleServers.forEach(
-        shuffleServerInfo -> {
-          callableList.add(
-              () -> {
-                try {
-                  ShuffleServerClient client =
-                      ShuffleServerClientFactory.getInstance()
-                          .getShuffleServerClient(clientType, shuffleServerInfo, rssConf);
-                  RssAppHeartBeatResponse response = client.sendHeartBeat(request);
-                  if (response.getStatusCode() != StatusCode.SUCCESS) {
-                    LOG.warn("Failed to send heartbeat to " + shuffleServerInfo);
-                  }
-                } catch (Exception e) {
-                  LOG.warn("Error happened when send heartbeat to " + shuffleServerInfo, e);
-                }
-                return null;
-              });
-        });
 
-    coordinatorClients.forEach(
+    ThreadUtils.executeTasks(
+        heartBeatExecutorService,
+        allShuffleServers,
+        shuffleServerInfo -> {
+          try {
+            ShuffleServerClient client =
+                ShuffleServerClientFactory.getInstance()
+                    .getShuffleServerClient(clientType, shuffleServerInfo, rssConf);
+            RssAppHeartBeatResponse response = client.sendHeartBeat(request);
+            if (response.getStatusCode() != StatusCode.SUCCESS) {
+              LOG.warn("Failed to send heartbeat to " + shuffleServerInfo);
+            }
+          } catch (Exception e) {
+            LOG.warn("Error happened when send heartbeat to " + shuffleServerInfo, e);
+          }
+          return null;
+        },
+        timeoutMs,
+        "send heartbeat to shuffle server");
+
+    ThreadUtils.executeTasks(
+        heartBeatExecutorService,
+        coordinatorClients,
         coordinatorClient -> {
-          callableList.add(
-              () -> {
-                try {
-                  RssAppHeartBeatResponse response = coordinatorClient.sendAppHeartBeat(request);
-                  if (response.getStatusCode() != StatusCode.SUCCESS) {
-                    LOG.warn("Failed to send heartbeat to " + coordinatorClient.getDesc());
-                  } else {
-                    LOG.info("Successfully send heartbeat to " + coordinatorClient.getDesc());
-                  }
-                } catch (Exception e) {
-                  LOG.warn(
-                      "Error happened when send heartbeat to " + coordinatorClient.getDesc(), e);
-                }
-                return null;
-              });
-        });
-    try {
-      List<Future<Void>> futures =
-          heartBeatExecutorService.invokeAll(callableList, timeoutMs, TimeUnit.MILLISECONDS);
-      for (Future<Void> future : futures) {
-        if (!future.isDone()) {
-          future.cancel(true);
-        }
-      }
-    } catch (InterruptedException ie) {
-      LOG.warn("heartbeat is interrupted", ie);
-    }
+          try {
+            RssAppHeartBeatResponse response = coordinatorClient.sendAppHeartBeat(request);
+            if (response.getStatusCode() != StatusCode.SUCCESS) {
+              LOG.warn("Failed to send heartbeat to " + coordinatorClient.getDesc());
+            } else {
+              LOG.info("Successfully send heartbeat to " + coordinatorClient.getDesc());
+            }
+          } catch (Exception e) {
+            LOG.warn("Error happened when send heartbeat to " + coordinatorClient.getDesc(), e);
+          }
+          return null;
+        },
+        timeoutMs,
+        "send heartbeat to coordinator");
   }
 
   @Override
@@ -961,7 +939,6 @@ public class ShuffleWriteClientImpl implements ShuffleWriteClient {
   @Override
   public void unregisterShuffle(String appId, int shuffleId) {
     RssUnregisterShuffleRequest request = new RssUnregisterShuffleRequest(appId, shuffleId);
-    List<Callable<Void>> callableList = Lists.newArrayList();
 
     Map<Integer, Set<ShuffleServerInfo>> appServerMap = shuffleServerInfoMap.get(appId);
     if (appServerMap == null) {
@@ -972,39 +949,32 @@ public class ShuffleWriteClientImpl implements ShuffleWriteClient {
       return;
     }
 
-    shuffleServerInfos.forEach(
-        shuffleServerInfo -> {
-          callableList.add(
-              () -> {
-                try {
-                  ShuffleServerClient client =
-                      ShuffleServerClientFactory.getInstance()
-                          .getShuffleServerClient(clientType, shuffleServerInfo, rssConf);
-                  RssUnregisterShuffleResponse response = client.unregisterShuffle(request);
-                  if (response.getStatusCode() != StatusCode.SUCCESS) {
-                    LOG.warn("Failed to unregister shuffle to " + shuffleServerInfo);
-                  }
-                } catch (Exception e) {
-                  LOG.warn("Error happened when unregistering to " + shuffleServerInfo, e);
-                }
-                return null;
-              });
-        });
-
     ExecutorService executorService = null;
     try {
       executorService =
           ThreadUtils.getDaemonFixedThreadPool(
               Math.min(unregisterThreadPoolSize, shuffleServerInfos.size()), "unregister-shuffle");
-      List<Future<Void>> futures =
-          executorService.invokeAll(callableList, unregisterRequestTimeSec, TimeUnit.SECONDS);
-      for (Future<Void> future : futures) {
-        if (!future.isDone()) {
-          future.cancel(true);
-        }
-      }
-    } catch (InterruptedException ie) {
-      LOG.warn("Unregister shuffle is interrupted", ie);
+
+      ThreadUtils.executeTasks(
+          executorService,
+          shuffleServerInfos,
+          shuffleServerInfo -> {
+            try {
+              ShuffleServerClient client =
+                  ShuffleServerClientFactory.getInstance()
+                      .getShuffleServerClient(clientType, shuffleServerInfo, rssConf);
+              RssUnregisterShuffleResponse response = client.unregisterShuffle(request);
+              if (response.getStatusCode() != StatusCode.SUCCESS) {
+                LOG.warn("Failed to unregister shuffle to " + shuffleServerInfo);
+              }
+            } catch (Exception e) {
+              LOG.warn("Error happened when unregistering to " + shuffleServerInfo, e);
+            }
+            return null;
+          },
+          unregisterRequestTimeSec,
+          "unregister shuffle server");
+
     } finally {
       if (executorService != null) {
         executorService.shutdownNow();
@@ -1015,6 +985,8 @@ public class ShuffleWriteClientImpl implements ShuffleWriteClient {
 
   @Override
   public void unregisterShuffle(String appId) {
+    RssUnregisterShuffleByAppIdRequest request = new RssUnregisterShuffleByAppIdRequest(appId);
+
     if (appId == null) {
       return;
     }
@@ -1022,7 +994,41 @@ public class ShuffleWriteClientImpl implements ShuffleWriteClient {
     if (appServerMap == null) {
       return;
     }
-    appServerMap.keySet().forEach(shuffleId -> unregisterShuffle(appId, shuffleId));
+    Set<ShuffleServerInfo> shuffleServerInfos = getAllShuffleServers(appId);
+
+    ExecutorService executorService = null;
+    try {
+      executorService =
+          ThreadUtils.getDaemonFixedThreadPool(
+              Math.min(unregisterThreadPoolSize, shuffleServerInfos.size()), "unregister-shuffle");
+
+      ThreadUtils.executeTasks(
+          executorService,
+          shuffleServerInfos,
+          shuffleServerInfo -> {
+            try {
+              ShuffleServerClient client =
+                  ShuffleServerClientFactory.getInstance()
+                      .getShuffleServerClient(clientType, shuffleServerInfo, rssConf);
+              RssUnregisterShuffleByAppIdResponse response =
+                  client.unregisterShuffleByAppId(request);
+              if (response.getStatusCode() != StatusCode.SUCCESS) {
+                LOG.warn("Failed to unregister shuffle to " + shuffleServerInfo);
+              }
+            } catch (Exception e) {
+              LOG.warn("Error happened when unregistering to " + shuffleServerInfo, e);
+            }
+            return null;
+          },
+          unregisterRequestTimeSec,
+          "unregister shuffle server");
+
+    } finally {
+      if (executorService != null) {
+        executorService.shutdownNow();
+      }
+      shuffleServerInfoMap.remove(appId);
+    }
   }
 
   private void throwExceptionIfNecessary(ClientResponse response, String errorMsg) {
