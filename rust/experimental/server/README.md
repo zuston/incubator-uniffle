@@ -79,7 +79,7 @@ memory_spill_low_watermark = 0.7
 | vanilla uniffle (netty-based) / 10g  |         /          |          read failed. 2.5G/s (write is better due to zero copy)          |
 | vanilla uniffle (netty-based) / 300g |         /          |                                 app hang                                 |
 | rust based shuffle server     / 10g  | 4.6min (2.2m/2.4m) |                                 2.4 G/s                                  |
-| rust based shuffle server     / 300g |  4min (1.5m/2.5m)  |                                 3.5 G/s                                  |
+| rust based shuffle server     / 300g | 3.8min (1.3m/2.5m) |                                  5 G/s                                   |
 
 
 Compared with grpc based server, rust-based server has less memory footprint and stable performance.  
