@@ -35,6 +35,10 @@ pub static TOTAL_RECEIVED_DATA: Lazy<IntCounter> = Lazy::new(|| {
     IntCounter::new("total_received_data", "Incoming Requests").expect("metric should be created")
 });
 
+pub static TOTAL_WRITING_CHANNEL_OUT: Lazy<IntCounter> = Lazy::new(|| {
+    IntCounter::new("total_writing_channel_out", "").expect("")
+});
+
 pub static TOTAL_READ_DATA: Lazy<IntCounter> = Lazy::new(|| {
     IntCounter::new("total_read_data", "Reading Data").expect("metric should be created")
 });
@@ -260,6 +264,10 @@ pub static TOTAL_SPILL_EVENTS_DROPPED: Lazy<IntCounter> = Lazy::new(|| {
 });
 
 fn register_custom_metrics() {
+    REGISTRY
+        .register(Box::new(TOTAL_WRITING_CHANNEL_OUT.clone()))
+        .expect("");
+
     REGISTRY
         .register(Box::new(TOTAL_GRPC_REQUEST.clone()))
         .expect("");

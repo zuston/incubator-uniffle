@@ -20,7 +20,7 @@ use crate::error::WorkerError;
 use crate::metric::{
     GAUGE_APP_NUMBER, GAUGE_TOPN_APP_RESIDENT_DATA_SIZE, TOTAL_APP_NUMBER,
     TOTAL_HUGE_PARTITION_REQUIRE_BUFFER_FAILED, TOTAL_READ_DATA, TOTAL_READ_DATA_FROM_LOCALFILE,
-    TOTAL_READ_DATA_FROM_MEMORY, TOTAL_RECEIVED_DATA, TOTAL_REQUIRE_BUFFER_FAILED,
+    TOTAL_READ_DATA_FROM_MEMORY, TOTAL_REQUIRE_BUFFER_FAILED,
 };
 
 use crate::readable_size::ReadableSize;
@@ -251,7 +251,6 @@ impl App {
         let len: i32 = ctx.data_blocks.iter().map(|block| block.length).sum();
         self.get_underlying_partition_bitmap(ctx.uid.clone())
             .incr_data_size(len)?;
-        TOTAL_RECEIVED_DATA.inc_by(len as u64);
         self.total_received_data_size.fetch_add(len as u64, SeqCst);
         self.total_resident_data_size.fetch_add(len as u64, SeqCst);
 
