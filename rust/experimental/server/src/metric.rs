@@ -36,7 +36,7 @@ pub static TOTAL_RECEIVED_DATA: Lazy<IntCounter> = Lazy::new(|| {
 });
 
 pub static TOTAL_WRITING_CHANNEL_OUT: Lazy<IntCounter> = Lazy::new(|| {
-    IntCounter::new("total_writing_channel_out", "").expect("")
+    IntCounter::new("total_writing_channel_out", "total writing channel out data size").expect("")
 });
 
 pub static TOTAL_READ_DATA: Lazy<IntCounter> = Lazy::new(|| {
