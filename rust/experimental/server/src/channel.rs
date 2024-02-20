@@ -33,7 +33,8 @@ impl Channel {
         let limiter = Arc::new(Semaphore::new(100usize));
         let rt_ref = runtime_manager.clone();
         runtime_manager.default_runtime.spawn(async move {
-            while let ctx = chan_ref.receiver.recv().unwrap() {
+            loop {
+                let ctx = chan_ref.receiver.recv().unwrap();
                 let _limiter_guard = limiter
                     .clone()
                     .acquire_owned()
