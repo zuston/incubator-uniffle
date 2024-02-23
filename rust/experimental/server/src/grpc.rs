@@ -41,6 +41,7 @@ use std::collections::HashMap;
 
 use log::{debug, error, info, warn};
 
+use crate::channel::Channel;
 use crate::metric::{
     GRPC_BUFFER_REQUIRE_PROCESS_TIME, GRPC_GET_LOCALFILE_DATA_PROCESS_TIME,
     GRPC_GET_MEMORY_DATA_PROCESS_TIME, GRPC_GET_MEMORY_DATA_TRANSPORT_TIME,
@@ -48,7 +49,6 @@ use crate::metric::{
 };
 use crate::util;
 use tonic::{Request, Response, Status};
-use crate::channel::Channel;
 
 /// Use the maximum value for HTTP/2 connection window size to avoid deadlock among multiplexed
 /// streams on the same connection.
@@ -83,7 +83,10 @@ pub struct DefaultShuffleServer {
 
 impl DefaultShuffleServer {
     pub fn from(app_manager_ref: AppManagerRef, writing_channel: Channel) -> DefaultShuffleServer {
-        DefaultShuffleServer { app_manager_ref, writing_channel }
+        DefaultShuffleServer {
+            app_manager_ref,
+            writing_channel,
+        }
     }
 }
 
@@ -219,6 +222,7 @@ impl ShuffleServer for DefaultShuffleServer {
             };
             let ctx = WritingViewContext::from(uid.clone(), blocks);
 
+            // #[cfg(feature = "async-channel-write")]
             let inserted = self.writing_channel.send(ctx);
 
             // let inserted = app
@@ -420,6 +424,22 @@ impl ShuffleServer for DefaultShuffleServer {
             shuffle_id,
             partition_id,
         };
+
+        match self
+            .writing_channel
+            .block_wait_partition_all_out(&partition_id)
+            .await
+        {
+            Ok(false) | Err(_) => {
+                return Ok(Response::new(GetMemoryShuffleDataResponse {
+                    shuffle_data_block_segments: Default::default(),
+                    data: Default::default(),
+                    status: StatusCode::INTERNAL_ERROR.into(),
+                    ret_msg: "Block wait all partitioned data into memory failed".to_string(),
+                }))
+            }
+            _ => {}
+        }
 
         let serialized_expected_task_ids_bitmap =
             if !req.serialized_expected_task_ids_bitmap.is_empty() {

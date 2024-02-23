@@ -19,6 +19,7 @@
 
 pub mod app;
 pub mod await_tree;
+pub mod channel;
 pub mod config;
 pub mod error;
 pub mod grpc;
@@ -31,9 +32,9 @@ pub mod runtime;
 pub mod signal;
 pub mod store;
 pub mod util;
-pub mod channel;
 
 use crate::app::AppManager;
+use crate::config::WritingChannelConfig;
 use crate::grpc::DefaultShuffleServer;
 use crate::http::{HTTPServer, HTTP_SERVICE};
 use crate::metric::init_metric_service;
@@ -73,7 +74,11 @@ pub async fn start_uniffle_worker(config: config::Config) -> Result<()> {
     let cloned_runtime_manager = runtime_manager.clone();
     let app_manager_ref = AppManager::get_ref(cloned_runtime_manager, config.clone());
 
-    let writing_channel = channel::Channel::new(app_manager_ref.clone(), runtime_manager.clone());
+    let writing_channel = channel::Channel::new(
+        WritingChannelConfig::default(),
+        app_manager_ref.clone(),
+        runtime_manager.clone(),
+    );
 
     // implement server startup
     runtime_manager.grpc_runtime.spawn(async move {

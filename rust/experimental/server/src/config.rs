@@ -75,6 +75,26 @@ impl LocalfileStoreConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
+pub struct WritingChannelConfig {
+    pub consumer_max_concurrency: usize,
+}
+
+impl Default for WritingChannelConfig {
+    fn default() -> Self {
+        WritingChannelConfig {
+            consumer_max_concurrency: 1000,
+        }
+    }
+}
+
+fn as_default_writing_channel_config() -> WritingChannelConfig {
+    Default::default()
+}
+
+// =========================================================
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct RuntimeConfig {
     pub read_thread_num: usize,
     pub write_thread_num: usize,
@@ -165,6 +185,9 @@ pub struct Config {
     pub huge_partition_memory_max_used_percent: Option<f64>,
 
     pub http_monitor_service_port: Option<u16>,
+
+    #[serde(default = "as_default_writing_channel_config")]
+    pub writing_channel_config: WritingChannelConfig,
 }
 
 // =========================================================

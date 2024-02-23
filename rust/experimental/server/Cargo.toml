@@ -48,6 +48,8 @@ hdfs = [
     "dep:hdfs-native"
 ]
 
+async-channel-write = []
+
 [dependencies]
 anyhow = "1"
 tokio = { version = "1.28.2", features = ["full" ] }
