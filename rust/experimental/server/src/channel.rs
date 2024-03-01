@@ -41,28 +41,29 @@ impl Channel {
             pdata_counter: Default::default(),
         };
 
-        let concurrency = config.consumer_max_concurrency;
-        let chan_ref = chan.clone();
-        let limiter = Arc::new(Semaphore::new(concurrency));
-        let rt_ref = runtime_manager.clone();
-        runtime_manager.default_runtime.spawn(async move {
-            loop {
-                let ctx = chan_ref.receiver.recv().unwrap();
-                let limiter_guard = limiter.clone().acquire_owned().await.unwrap();
+        for _ in 0..5 {
+            let concurrency = config.consumer_max_concurrency;
+            let chan_ref = chan.clone();
+            let limiter = Arc::new(Semaphore::new(concurrency));
+            let rt_ref = runtime_manager.clone();
+            runtime_manager.default_runtime.spawn(async move {
+                loop {
+                    let ctx = chan_ref.receiver.recv().unwrap();
+                    let limiter_guard = limiter.clone().acquire_owned().await.unwrap();
 
-                let chan_ref_child = chan_ref.clone();
-                rt_ref.write_runtime.spawn(async move {
-                    let uid_ref = &ctx.clone().uid;
-                    let app_id = ctx.uid.app_id.as_str();
-                    let app = chan_ref_child.app_manager.get_app(app_id).unwrap();
-                    let len = app.insert(ctx).await.unwrap();
-                    TOTAL_WRITING_CHANNEL_OUT.inc_by(len as u64);
-                    chan_ref_child.desc_partition_counter(uid_ref);
-                    drop(limiter_guard);
-                });
-            }
-        });
-
+                    let chan_ref_child = chan_ref.clone();
+                    rt_ref.write_runtime.spawn(async move {
+                        let uid_ref = &ctx.clone().uid;
+                        let app_id = ctx.uid.app_id.as_str();
+                        let app = chan_ref_child.app_manager.get_app(app_id).unwrap();
+                        let len = app.insert(ctx).await.unwrap();
+                        TOTAL_WRITING_CHANNEL_OUT.inc_by(len as u64);
+                        chan_ref_child.desc_partition_counter(uid_ref);
+                        drop(limiter_guard);
+                    });
+                }
+            });
+        }
         chan
     }
 
@@ -99,8 +100,8 @@ impl Channel {
     fn is_partition_all_out(&self, uid: &PartitionedUId) -> anyhow::Result<bool> {
         if let Some(existing_value) = self.pdata_counter.get(uid) {
             let counter = existing_value.value().load(Ordering::SeqCst);
+            drop(existing_value);
             if counter == 0 {
-                drop(existing_value);
                 self.pdata_counter.remove(uid);
                 Ok(true)
             } else {
