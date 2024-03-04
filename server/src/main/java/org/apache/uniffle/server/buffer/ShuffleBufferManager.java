@@ -86,6 +86,8 @@ public class ShuffleBufferManager {
       this.capacity =
           (long) (heapSize * conf.getDouble(ShuffleServerConf.SERVER_BUFFER_CAPACITY_RATIO));
     }
+    ShuffleServerMetrics.gaugeMemoryCapacity.set(capacity);
+
     this.readCapacity = conf.getSizeAsBytes(ShuffleServerConf.SERVER_READ_BUFFER_CAPACITY);
     if (this.readCapacity < 0) {
       this.readCapacity =
