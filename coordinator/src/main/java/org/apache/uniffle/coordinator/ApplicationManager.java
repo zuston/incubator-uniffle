@@ -346,6 +346,8 @@ public class ApplicationManager implements Closeable {
           decRemoteStorageCounter(appIdToRemoteStorageInfo.get(appId).getPath());
           appIdToRemoteStorageInfo.remove(appId);
         }
+
+        CoordinatorMetrics.gaugeTaskFailedNum.remove(appId);
       }
       CoordinatorMetrics.gaugeRunningAppNum.set(appIds.size());
       updateRemoteStorageMetrics();
