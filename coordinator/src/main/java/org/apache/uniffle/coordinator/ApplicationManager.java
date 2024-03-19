@@ -348,8 +348,12 @@ public class ApplicationManager implements Closeable {
         }
 
         CoordinatorMetrics.gaugeTaskFailedNum.remove(appId);
+        CoordinatorMetrics.gaugeAppRunning.remove(appId);
       }
       CoordinatorMetrics.gaugeRunningAppNum.set(appIds.size());
+      for (String appId : appIds.keySet()) {
+        CoordinatorMetrics.gaugeAppRunning.labels(appId).set(0);
+      }
       updateRemoteStorageMetrics();
       if (quotaManager != null) {
         quotaManager.updateQuotaMetrics();
