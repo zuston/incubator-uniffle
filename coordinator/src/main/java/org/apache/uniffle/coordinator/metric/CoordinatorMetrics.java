@@ -47,6 +47,8 @@ public class CoordinatorMetrics {
   public static final String USER_LABEL = "user_name";
 
   private static final String TASK_FAILED_NUM = "task_failed_num";
+  private static final String APP_RUNNING = "app_running";
+  public static Gauge gaugeAppRunning;
   public static Gauge gaugeTaskFailedNum;
   public static Gauge gaugeTotalServerNum;
   public static Gauge gaugeExcludeServerNum;
@@ -115,6 +117,7 @@ public class CoordinatorMetrics {
 
   private static void setUpMetrics() {
     gaugeTaskFailedNum = metricsManager.addGauge(TASK_FAILED_NUM, "app_id");
+    gaugeAppRunning = metricsManager.addGauge(APP_RUNNING, "app_id");
     gaugeTotalServerNum = metricsManager.addGauge(TOTAL_SERVER_NUM);
     gaugeExcludeServerNum = metricsManager.addGauge(EXCLUDE_SERVER_NUM);
     gaugeUnhealthyServerNum = metricsManager.addGauge(UNHEALTHY_SERVER_NUM);
