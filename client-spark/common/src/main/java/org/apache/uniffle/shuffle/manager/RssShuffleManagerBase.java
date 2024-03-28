@@ -38,6 +38,9 @@ import org.apache.spark.shuffle.RssSparkConfig;
 import org.apache.spark.shuffle.RssSparkShuffleUtils;
 import org.apache.spark.shuffle.ShuffleManager;
 import org.apache.spark.shuffle.SparkVersionUtils;
+import org.apache.uniffle.client.api.ShuffleManagerClient;
+import org.apache.uniffle.client.factory.ShuffleManagerClientFactory;
+import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,6 +64,52 @@ public abstract class RssShuffleManagerBase implements RssShuffleManagerInterfac
   private AtomicBoolean isInitialized = new AtomicBoolean(false);
   private Method unregisterAllMapOutputMethod;
   private Method registerShuffleMethod;
+  private final BlockIdManager blockIdManager = new BlockIdManager();
+  /** used by columnar rss shuffle writer implementation */
+  protected final SparkConf sparkConf;
+  protected final RssConf rssConf;
+  private ShuffleManagerClient shuffleManagerClient;
+
+  public RssShuffleManagerBase(SparkConf sparkConf, boolean isDriver) {
+    this.sparkConf = sparkConf;
+    this.rssConf = RssSparkConfig.toRssConf(sparkConf);
+  }
+
+  public synchronized ShuffleManagerClient getOrCreateShuffleManagerClient() {
+    if (shuffleManagerClient == null) {
+      String host = sparkConf.get("spark.driver.host", "");
+      int port = rssConf.get(RssClientConf.SHUFFLE_MANAGER_GRPC_PORT);
+      shuffleManagerClient = ShuffleManagerClientFactory.getInstance()
+          .createShuffleManagerClient(ClientType.GRPC, host, port);
+    }
+    return shuffleManagerClient;
+  }
+
+  public boolean clearShuffleResult(int shuffleId) {
+    return blockIdManager.clearBlockIds(shuffleId);
+  }
+
+  public boolean reportShuffleResult(
+      int shuffleId, long taskAttemptId, int bitmapNum, Map<Integer, long[]> partitionedBlockIds) {
+    for (Map.Entry<Integer, long[]> entry : partitionedBlockIds.entrySet()) {
+      blockIdManager.addPartitionedBlockIds(shuffleId, entry.getKey(), entry.getValue());
+    }
+    return true;
+  }
+
+  public Roaring64NavigableMap getShuffleResult(int shuffleId, List<Integer> partitionIds) {
+    Roaring64NavigableMap bitmap = null;
+    for (Integer partitionId : partitionIds) {
+      Roaring64NavigableMap partitionedBlockIdMap =
+          blockIdManager.getPartitionedBlockIds(shuffleId, partitionId);
+      if (bitmap == null) {
+        bitmap = partitionedBlockIdMap;
+      } else {
+        bitmap.and(partitionedBlockIdMap);
+      }
+    }
+    return bitmap;
+  }
 
   /** See static overload of this method. */
   public abstract void configureBlockIdLayout(SparkConf sparkConf, RssConf rssConf);

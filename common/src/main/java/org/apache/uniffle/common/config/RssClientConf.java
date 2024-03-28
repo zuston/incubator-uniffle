@@ -209,4 +209,10 @@ public class RssClientConf {
           .defaultValue(false)
           .withDescription(
               "Whether to support task write failed retry internal, default value is false.");
+
+  public static final ConfigOption<Boolean> RSS_BLOCK_ID_SELF_MANAGED_ENABLED =
+      ConfigOptions.key("rss.blockId.selfManaged.enabled")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("");
 }

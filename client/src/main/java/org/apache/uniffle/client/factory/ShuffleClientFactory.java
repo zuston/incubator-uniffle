@@ -20,6 +20,7 @@ package org.apache.uniffle.client.factory;
 import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.uniffle.client.api.ShuffleManagerClient;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
 import org.apache.uniffle.client.api.ShuffleReadClient;
@@ -69,6 +70,8 @@ public class ShuffleClientFactory {
     private int unregisterThreadPoolSize;
     private int unregisterRequestTimeSec;
     private RssConf rssConf;
+    private boolean isBlockIdSelfManaged;
+    private ShuffleManagerClient shuffleManagerClient;
 
     public String getClientType() {
       return clientType;
@@ -120,6 +123,24 @@ public class ShuffleClientFactory {
 
     public RssConf getRssConf() {
       return rssConf;
+    }
+
+    public boolean isBlockIdSelfManaged() {
+      return isBlockIdSelfManaged;
+    }
+
+    public ShuffleManagerClient getShuffleManagerClient() {
+      return shuffleManagerClient;
+    }
+
+    public WriteClientBuilder setIsBlockIdSelfManaged(boolean isBlockIdSelfManaged) {
+      this.isBlockIdSelfManaged = isBlockIdSelfManaged;
+      return this;
+    }
+
+    public WriteClientBuilder shuffleManagerClient(ShuffleManagerClient shuffleManagerClient) {
+      this.shuffleManagerClient = shuffleManagerClient;
+      return this;
     }
 
     public WriteClientBuilder clientType(String clientType) {

@@ -26,15 +26,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Supplier;
 
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.UnsafeByteOperations;
 import io.grpc.stub.StreamObserver;
 import org.apache.spark.shuffle.ShuffleHandleInfo;
+import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.uniffle.common.RemoteStorageInfo;
 import org.apache.uniffle.common.ShuffleServerInfo;
 import org.apache.uniffle.common.util.JavaUtils;
+import org.apache.uniffle.common.util.RssUtils;
 import org.apache.uniffle.proto.RssProtos;
 import org.apache.uniffle.proto.ShuffleManagerGrpc.ShuffleManagerImplBase;
 
@@ -48,6 +53,82 @@ public class ShuffleManagerGrpcService extends ShuffleManagerImplBase {
 
   public ShuffleManagerGrpcService(RssShuffleManagerInterface shuffleManager) {
     this.shuffleManager = shuffleManager;
+  }
+
+  @Override
+  public void reportShuffleResult(
+      RssProtos.ReportShuffleResultRequest request,
+      StreamObserver<RssProtos.ReportShuffleResultResponse> responseObserver) {
+    String appId = request.getAppId();
+    // todo: check the app
+
+    int shuffleId = request.getShuffleId();
+    long taskAttemptId = request.getTaskAttemptId();
+    int bitmapNum = request.getBitmapNum();
+    Map<Integer, long[]> partitionedBlockIds =
+        toPartitionBlocksMap(request.getPartitionToBlockIdsList());
+    shuffleManager.reportShuffleResult(shuffleId, taskAttemptId, bitmapNum, partitionedBlockIds);
+
+    RssProtos.ReportShuffleResultResponse reply =
+        RssProtos.ReportShuffleResultResponse.newBuilder()
+            .setStatus(RssProtos.StatusCode.SUCCESS)
+            .build();
+    responseObserver.onNext(reply);
+    responseObserver.onCompleted();
+  }
+
+  private static Map<Integer, long[]> toPartitionBlocksMap(
+      List<RssProtos.PartitionToBlockIds> partitionToBlockIds) {
+    Map<Integer, long[]> result = Maps.newHashMap();
+    for (RssProtos.PartitionToBlockIds ptb : partitionToBlockIds) {
+      List<Long> blockIds = ptb.getBlockIdsList();
+      if (blockIds != null && !blockIds.isEmpty()) {
+        long[] array = new long[blockIds.size()];
+        for (int i = 0; i < array.length; i++) {
+          array[i] = blockIds.get(i);
+        }
+        result.put(ptb.getPartitionId(), array);
+      }
+    }
+    return result;
+  }
+
+  @Override
+  public void getShuffleResult(
+      RssProtos.GetShuffleResultForMultiPartRequest request,
+      StreamObserver<RssProtos.GetShuffleResultForMultiPartResponse> responseObserver) {
+    RssProtos.StatusCode statusCode = RssProtos.StatusCode.SUCCESS;
+    String message = "";
+    ByteString serializedBlockIds = null;
+
+    try {
+      String appId = request.getAppId();
+      if (!appId.equals(shuffleManager.getAppId())) {
+        String msg =
+            String.format(
+                "invalid request of getShuffleResult from appId: %s, expected appId: %s",
+                appId, shuffleManager.getAppId());
+        throw new Exception(msg);
+      }
+
+      int shuffleId = request.getShuffleId();
+      List<Integer> partitionIds = request.getPartitionsList();
+      Roaring64NavigableMap blockIdMap = shuffleManager.getShuffleResult(shuffleId, partitionIds);
+      serializedBlockIds = UnsafeByteOperations.unsafeWrap(RssUtils.serializeBitMap(blockIdMap));
+    } catch (Exception e) {
+      LOG.error("Errors on getting shuffle blockIds. shuffleId: {}", request.getShuffleId(), e);
+      statusCode = RssProtos.StatusCode.INTERNAL_ERROR;
+      message = e.getMessage();
+    }
+
+    RssProtos.GetShuffleResultForMultiPartResponse reply =
+        RssProtos.GetShuffleResultForMultiPartResponse.newBuilder()
+            .setStatus(statusCode)
+            .setRetMsg(message)
+            .setSerializedBitmap(serializedBlockIds)
+            .build();
+    responseObserver.onNext(reply);
+    responseObserver.onCompleted();
   }
 
   @Override

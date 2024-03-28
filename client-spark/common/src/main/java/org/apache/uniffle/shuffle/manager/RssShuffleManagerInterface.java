@@ -17,10 +17,13 @@
 
 package org.apache.uniffle.shuffle.manager;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.spark.SparkException;
 import org.apache.spark.shuffle.ShuffleHandleInfo;
+import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
 import org.apache.uniffle.common.ShuffleServerInfo;
 
@@ -80,4 +83,9 @@ public interface RssShuffleManagerInterface {
 
   ShuffleServerInfo reassignFaultyShuffleServerForTasks(
       int shuffleId, Set<String> partitionIds, String faultyShuffleServerId);
+
+  boolean reportShuffleResult(
+      int shuffleId, long taskAttemptId, int bitmapNum, Map<Integer, long[]> partitionedBlockIds);
+
+  Roaring64NavigableMap getShuffleResult(int shuffleId, List<Integer> partitionIds);
 }

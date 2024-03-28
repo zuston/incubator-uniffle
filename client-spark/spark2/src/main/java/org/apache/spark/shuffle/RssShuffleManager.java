@@ -53,22 +53,18 @@ import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.uniffle.client.api.ShuffleManagerClient;
 import org.apache.uniffle.client.api.ShuffleWriteClient;
 import org.apache.uniffle.client.factory.ShuffleClientFactory;
-import org.apache.uniffle.client.factory.ShuffleManagerClientFactory;
 import org.apache.uniffle.client.impl.FailedBlockSendTracker;
 import org.apache.uniffle.client.request.RssPartitionToShuffleServerRequest;
 import org.apache.uniffle.client.response.RssPartitionToShuffleServerResponse;
 import org.apache.uniffle.client.util.ClientUtils;
 import org.apache.uniffle.client.util.RssClientConfig;
-import org.apache.uniffle.common.ClientType;
 import org.apache.uniffle.common.PartitionRange;
 import org.apache.uniffle.common.RemoteStorageInfo;
 import org.apache.uniffle.common.ShuffleAssignmentsInfo;
 import org.apache.uniffle.common.ShuffleDataDistributionType;
 import org.apache.uniffle.common.ShuffleServerInfo;
-import org.apache.uniffle.common.config.RssClientConf;
 import org.apache.uniffle.common.config.RssConf;
 import org.apache.uniffle.common.exception.RssException;
 import org.apache.uniffle.common.exception.RssFetchFailedException;
@@ -91,7 +87,6 @@ public class RssShuffleManager extends RssShuffleManagerBase {
   private final long heartbeatInterval;
   private final long heartbeatTimeout;
   private ScheduledExecutorService heartBeatScheduledExecutorService;
-  private SparkConf sparkConf;
   private String appId = "";
   private String clientType;
   private ShuffleWriteClient shuffleWriteClient;
@@ -119,7 +114,6 @@ public class RssShuffleManager extends RssShuffleManagerBase {
   private final Map<Integer, Integer> shuffleIdToNumMapTasks = JavaUtils.newConcurrentMap();
   private GrpcServer shuffleManagerServer;
   private ShuffleManagerGrpcService service;
-  private ShuffleManagerClient shuffleManagerClient;
   /**
    * Mapping between ShuffleId and ShuffleServer list. ShuffleServer list is dynamically allocated.
    * ShuffleServer is not obtained from RssShuffleHandle, but from this mapping.
@@ -139,11 +133,11 @@ public class RssShuffleManager extends RssShuffleManagerBase {
   private Map<String, ShuffleServerInfo> reassignedFaultyServers = JavaUtils.newConcurrentMap();
 
   public RssShuffleManager(SparkConf sparkConf, boolean isDriver) {
+    super(sparkConf, isDriver);
     if (sparkConf.getBoolean("spark.sql.adaptive.enabled", false)) {
       throw new IllegalArgumentException(
           "Spark2 doesn't support AQE, spark.sql.adaptive.enabled should be false.");
     }
-    this.sparkConf = sparkConf;
     this.user = sparkConf.get("spark.rss.quota.user", "user");
     this.uuid = sparkConf.get("spark.rss.quota.uuid", Long.toString(System.currentTimeMillis()));
     this.dynamicConfEnabled = sparkConf.get(RssSparkConfig.RSS_DYNAMIC_CLIENT_CONF_ENABLED);
@@ -796,13 +790,6 @@ public class RssShuffleManager extends RssShuffleManagerBase {
     return shuffleIdToShuffleHandleInfo.get(shuffleId);
   }
 
-  private ShuffleManagerClient createShuffleManagerClient(String host, int port) {
-    // Host can be inferred from `spark.driver.bindAddress`, which would be set when SparkContext is
-    // constructed.
-    return ShuffleManagerClientFactory.getInstance()
-        .createShuffleManagerClient(ClientType.GRPC, host, port);
-  }
-
   /**
    * Get the ShuffleServer list from the Driver based on the shuffleId
    *
@@ -810,18 +797,11 @@ public class RssShuffleManager extends RssShuffleManagerBase {
    * @return ShuffleHandleInfo
    */
   private synchronized ShuffleHandleInfo getRemoteShuffleHandleInfo(int shuffleId) {
-    ShuffleHandleInfo shuffleHandleInfo;
-    RssConf rssConf = RssSparkConfig.toRssConf(sparkConf);
-    String driver = rssConf.getString("driver.host", "");
-    int port = rssConf.get(RssClientConf.SHUFFLE_MANAGER_GRPC_PORT);
-    if (shuffleManagerClient == null) {
-      shuffleManagerClient = createShuffleManagerClient(driver, port);
-    }
     RssPartitionToShuffleServerRequest rssPartitionToShuffleServerRequest =
         new RssPartitionToShuffleServerRequest(shuffleId);
     RssPartitionToShuffleServerResponse rpcPartitionToShufflerServer =
-        shuffleManagerClient.getPartitionToShufflerServer(rssPartitionToShuffleServerRequest);
-    shuffleHandleInfo =
+        super.getOrCreateShuffleManagerClient().getPartitionToShufflerServer(rssPartitionToShuffleServerRequest);
+    ShuffleHandleInfo shuffleHandleInfo =
         new ShuffleHandleInfo(
             shuffleId,
             rpcPartitionToShufflerServer.getPartitionToServers(),

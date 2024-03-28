@@ -525,6 +525,10 @@ service ShuffleManager {
   rpc reassignShuffleServers(ReassignServersRequest) returns (ReassignServersReponse);
   // Reassign a new server instead a faulty server the RPC interface
   rpc reassignFaultyShuffleServer(RssReassignFaultyShuffleServerRequest) returns (RssReassignFaultyShuffleServerResponse);
+  // Report finished blockIds
+  rpc reportShuffleResult(ReportShuffleResultRequest) returns (ReportShuffleResultResponse);
+  // Get finished blockIds
+  rpc getShuffleResult(GetShuffleResultForMultiPartRequest) returns (GetShuffleResultForMultiPartResponse);
 }
 
 message ReportShuffleFetchFailureRequest {

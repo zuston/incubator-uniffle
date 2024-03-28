@@ -91,6 +91,7 @@ import org.apache.uniffle.shuffle.manager.ShuffleManagerServerFactory;
 
 import static org.apache.uniffle.common.config.RssBaseConf.RPC_SERVER_PORT;
 import static org.apache.uniffle.common.config.RssClientConf.MAX_CONCURRENCY_PER_PARTITION_TO_WRITE;
+import static org.apache.uniffle.common.config.RssClientConf.RSS_BLOCK_ID_SELF_MANAGED_ENABLED;
 
 public class RssShuffleManager extends RssShuffleManagerBase {
   private static final Logger LOG = LoggerFactory.getLogger(RssShuffleManager.class);
@@ -123,13 +124,8 @@ public class RssShuffleManager extends RssShuffleManagerBase {
   private final Map<Integer, Integer> shuffleIdToNumMapTasks = JavaUtils.newConcurrentMap();
   private ShuffleManagerGrpcService service;
   private GrpcServer shuffleManagerServer;
-
-  /** used by columnar rss shuffle writer implementation */
-  protected SparkConf sparkConf;
-
   protected ShuffleWriteClient shuffleWriteClient;
 
-  private ShuffleManagerClient shuffleManagerClient;
   /**
    * Mapping between ShuffleId and ShuffleServer list. ShuffleServer list is dynamically allocated.
    * ShuffleServer is not obtained from RssShuffleHandle, but from this mapping.
@@ -148,7 +144,7 @@ public class RssShuffleManager extends RssShuffleManagerBase {
   private Map<String, ShuffleServerInfo> reassignedFaultyServers;
 
   public RssShuffleManager(SparkConf conf, boolean isDriver) {
-    this.sparkConf = conf;
+    super(conf, isDriver);
     boolean supportsRelocation =
         Optional.ofNullable(SparkEnv.get())
             .map(env -> env.serializer().supportsRelocationOfSerializedObjects())
@@ -206,23 +202,28 @@ public class RssShuffleManager extends RssShuffleManagerBase {
         sparkConf.get(RssSparkConfig.RSS_CLIENT_UNREGISTER_THREAD_POOL_SIZE);
     int unregisterRequestTimeoutSec =
         sparkConf.get(RssSparkConfig.RSS_CLIENT_UNREGISTER_REQUEST_TIMEOUT_SEC);
+
+    ShuffleClientFactory.WriteClientBuilder writeClientBuilder = ShuffleClientFactory.newWriteBuilder()
+        .clientType(clientType)
+        .retryMax(retryMax)
+        .retryIntervalMax(retryIntervalMax)
+        .heartBeatThreadNum(heartBeatThreadNum)
+        .replica(dataReplica)
+        .replicaWrite(dataReplicaWrite)
+        .replicaRead(dataReplicaRead)
+        .replicaSkipEnabled(dataReplicaSkipEnabled)
+        .dataTransferPoolSize(dataTransferPoolSize)
+        .dataCommitPoolSize(dataCommitPoolSize)
+        .unregisterThreadPoolSize(unregisterThreadPoolSize)
+        .unregisterRequestTimeSec(unregisterRequestTimeoutSec)
+        .rssConf(rssConf);
+    if (!isDriver && rssConf.getBoolean(RSS_BLOCK_ID_SELF_MANAGED_ENABLED)) {
+      writeClientBuilder.setIsBlockIdSelfManaged(true).shuffleManagerClient(getOrCreateShuffleManagerClient());
+    }
     shuffleWriteClient =
         ShuffleClientFactory.getInstance()
-            .createShuffleWriteClient(
-                ShuffleClientFactory.newWriteBuilder()
-                    .clientType(clientType)
-                    .retryMax(retryMax)
-                    .retryIntervalMax(retryIntervalMax)
-                    .heartBeatThreadNum(heartBeatThreadNum)
-                    .replica(dataReplica)
-                    .replicaWrite(dataReplicaWrite)
-                    .replicaRead(dataReplicaRead)
-                    .replicaSkipEnabled(dataReplicaSkipEnabled)
-                    .dataTransferPoolSize(dataTransferPoolSize)
-                    .dataCommitPoolSize(dataCommitPoolSize)
-                    .unregisterThreadPoolSize(unregisterThreadPoolSize)
-                    .unregisterRequestTimeSec(unregisterRequestTimeoutSec)
-                    .rssConf(rssConf));
+            .createShuffleWriteClient(writeClientBuilder);
+
     registerCoordinator();
     // External shuffle service is not supported when using remote shuffle service
     sparkConf.set("spark.shuffle.service.enabled", "false");
@@ -304,7 +305,7 @@ public class RssShuffleManager extends RssShuffleManagerBase {
       DataPusher dataPusher,
       Map<String, Set<Long>> taskToSuccessBlockIds,
       Map<String, FailedBlockSendTracker> taskToFailedBlockSendTracker) {
-    this.sparkConf = conf;
+    super(conf, isDriver);
     this.clientType = sparkConf.get(RssSparkConfig.RSS_CLIENT_TYPE);
     RssConf rssConf = RssSparkConfig.toRssConf(sparkConf);
     this.dataDistributionType = rssConf.get(RssClientConf.DATA_DISTRIBUTION_TYPE);
@@ -846,6 +847,7 @@ public class RssShuffleManager extends RssShuffleManagerBase {
         if (service != null) {
           service.unregisterShuffle(shuffleId);
         }
+        super.clearShuffleResult(shuffleId);
       }
     } catch (Exception e) {
       LOG.warn("Errors on unregister to remote shuffle-servers", e);
@@ -1103,16 +1105,11 @@ public class RssShuffleManager extends RssShuffleManagerBase {
    */
   private synchronized ShuffleHandleInfo getRemoteShuffleHandleInfo(int shuffleId) {
     ShuffleHandleInfo shuffleHandleInfo;
-    RssConf rssConf = RssSparkConfig.toRssConf(sparkConf);
-    String driver = rssConf.getString("driver.host", "");
-    int port = rssConf.get(RssClientConf.SHUFFLE_MANAGER_GRPC_PORT);
-    if (shuffleManagerClient == null) {
-      shuffleManagerClient = createShuffleManagerClient(driver, port);
-    }
     RssPartitionToShuffleServerRequest rssPartitionToShuffleServerRequest =
         new RssPartitionToShuffleServerRequest(shuffleId);
+    ShuffleManagerClient client = super.getOrCreateShuffleManagerClient();
     RssPartitionToShuffleServerResponse rpcPartitionToShufflerServer =
-        shuffleManagerClient.getPartitionToShufflerServer(rssPartitionToShuffleServerRequest);
+        client.getPartitionToShufflerServer(rssPartitionToShuffleServerRequest);
     shuffleHandleInfo =
         new ShuffleHandleInfo(
             shuffleId,
