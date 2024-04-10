@@ -489,11 +489,13 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
         "appId[" + appId + "], shuffleId[" + shuffleId + "], taskAttemptId[" + taskAttemptId + "]";
 
     try {
-      LOG.info(
-          "Report "
-              + partitionToBlockIds.size()
-              + " blocks as shuffle result for the task of "
-              + requestInfo);
+      if (LOG.isDebugEnabled()) {
+        LOG.info(
+            "Report "
+                + partitionToBlockIds.size()
+                + " blocks as shuffle result for the task of "
+                + requestInfo);
+      }
       shuffleServer
           .getShuffleTaskManager()
           .addFinishedBlockIds(appId, shuffleId, partitionToBlockIds, bitmapNum);
