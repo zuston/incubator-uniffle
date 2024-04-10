@@ -144,7 +144,11 @@ public class HadoopStorageManager extends SingleStorageManager {
           return hadoopStorage;
         });
     appIdToStorages.computeIfAbsent(appId, key -> pathToStorages.get(remoteStorage));
-    LOG.info("register remote storage {} successfully for appId {}", remoteStorageInfo, appId);
+    if (LOG.isDebugEnabled()) {
+      LOG.info("register remote storage {} successfully for appId {}", remoteStorageInfo, appId);
+    } else {
+      LOG.info("register remote storage successfully for appId {}", appId);
+    }
   }
 
   @Override
