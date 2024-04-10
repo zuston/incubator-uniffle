@@ -106,7 +106,7 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
     LOGGER.info("Initialized black list info: {}", blackListInfo);
 
     updateBlacklistScheduler = Executors.newSingleThreadScheduledExecutor(
-        ThreadUtils.getThreadFactory("Update-black-list-%d")
+        ThreadUtils.getThreadFactory("Update-black-list")
     );
 
     updateBlacklistScheduler.scheduleAtFixedRate(
