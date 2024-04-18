@@ -211,7 +211,6 @@ public class LocalStorageManager extends SingleStorageManager {
             .collect(Collectors.toList());
 
     if (candidates.size() == 0) {
-      LOG.warn("The candidate local storage is empty for event: {}. This should not happen.", event);
       return null;
     }
     final LocalStorage selectedStorage =

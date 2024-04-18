@@ -125,8 +125,7 @@ public class DefaultFlushEventHandler implements FlushEventHandler {
         // When we did not select storage for this event, we will ignore this event.
         // Then we must doCleanup, or will result to resource leak.
         fallbackThreadPoolExecutor.execute(() -> event.doCleanup());
-        LOG.error("Found unexpected storage type: {}, will not flush for event {}.", storage, event);
-        ShuffleServerMetrics.counterTotalDroppedEventNum.inc();
+        LOG.error("Found unexpected storage type, will not flush for event {}.", event);
       }
     } catch (Exception e) {
       LOG.error("Exception happened when process event.", e);

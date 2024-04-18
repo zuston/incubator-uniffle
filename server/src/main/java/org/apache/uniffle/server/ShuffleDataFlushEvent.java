@@ -172,9 +172,7 @@ public class ShuffleDataFlushEvent {
         + ", underStorage="
         + (underStorage == null ? null : underStorage.getClass().getSimpleName())
         + ", isPended="
-        + isPended
-        + ", isOwnedByHugePartition="
-        + ownedByHugePartition;
+        + isPended;
   }
 
   public boolean isOwnedByHugePartition() {
