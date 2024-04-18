@@ -65,7 +65,6 @@ public class DefaultFlushEventHandler implements FlushEventHandler {
   @Override
   public void handle(ShuffleDataFlushEvent event) {
     if (!flushQueue.offer(event)) {
-      ShuffleServerMetrics.counterTotalDroppedEventNum.inc();
       LOG.warn("Flush queue is full, discard event: " + event);
     } else {
       ShuffleServerMetrics.gaugeEventQueueSize.inc();
@@ -81,7 +80,6 @@ public class DefaultFlushEventHandler implements FlushEventHandler {
       } else {
         ShuffleServerMetrics.counterHadoopEventFlush.inc();
       }
-      ShuffleServerMetrics.gaugeEventQueueSize.dec();
     }
   }
 
@@ -127,7 +125,7 @@ public class DefaultFlushEventHandler implements FlushEventHandler {
         // When we did not select storage for this event, we will ignore this event.
         // Then we must doCleanup, or will result to resource leak.
         fallbackThreadPoolExecutor.execute(() -> event.doCleanup());
-        LOG.error("Found unexpected storage type: {}, discard this event: {}.", storage, event);
+        LOG.error("Found unexpected storage type: {}, will not flush for event {}.", storage, event);
         ShuffleServerMetrics.counterTotalDroppedEventNum.inc();
       }
     } catch (Exception e) {

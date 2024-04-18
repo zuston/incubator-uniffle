@@ -133,6 +133,7 @@ public class ShuffleFlushManager {
       LOG.error("Exception happened when flush data for " + event, e);
     } finally {
       ShuffleServerMetrics.gaugeWriteHandler.dec();
+      ShuffleServerMetrics.gaugeEventQueueSize.dec();
     }
   }
 
