@@ -20,8 +20,11 @@ package org.apache.uniffle.server.storage.hybrid;
 import org.apache.uniffle.server.ShuffleDataFlushEvent;
 import org.apache.uniffle.server.storage.AbstractStorageManagerFallbackStrategy;
 import org.apache.uniffle.server.storage.StorageManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class FallbackBasedStorageManagerSelector implements StorageManagerSelector {
+  private static final Logger LOGGER = LoggerFactory.getLogger(FallbackBasedStorageManagerSelector.class);
   protected final StorageManager warmStorageManager;
   protected final StorageManager coldStorageManager;
   private final AbstractStorageManagerFallbackStrategy fallbackStrategy;
@@ -47,7 +50,10 @@ public abstract class FallbackBasedStorageManagerSelector implements StorageMana
   public StorageManager select(ShuffleDataFlushEvent flushEvent) {
     StorageManager storageManager = regularSelect(flushEvent);
     if (!storageManager.canWrite(flushEvent) || flushEvent.getRetryTimes() > 0) {
+      final StorageManager previous = storageManager;
       storageManager = fallbackSelect(flushEvent, storageManager);
+      LOGGER.info("Fallback storage manager from [{}] to [{}] for event: {}",
+          previous.getClass().getSimpleName(), storageManager.getClass().getName(), flushEvent);
     }
     return storageManager;
   }
