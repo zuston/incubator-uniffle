@@ -74,6 +74,7 @@ import org.apache.uniffle.storage.util.StorageType;
 
 import static org.apache.uniffle.server.ShuffleServerConf.DISK_CAPACITY_WATERMARK_CHECK_ENABLED;
 import static org.apache.uniffle.server.ShuffleServerConf.LOCAL_STORAGE_INITIALIZE_MAX_FAIL_NUMBER;
+import static org.apache.uniffle.server.ShuffleServerConf.SERVICE_USED_CAPACITY_WATERMARK_CHECK_ENABLED;
 
 public class LocalStorageManager extends SingleStorageManager {
   private static final Logger LOG = LoggerFactory.getLogger(LocalStorageManager.class);
@@ -115,6 +116,7 @@ public class LocalStorageManager extends SingleStorageManager {
     ExecutorService executorService = ThreadUtils.getDaemonCachedThreadPool("LocalStorage-check");
     LocalStorage[] localStorageArray = new LocalStorage[storageBasePaths.size()];
     boolean isDiskCapacityWatermarkCheckEnabled = conf.get(DISK_CAPACITY_WATERMARK_CHECK_ENABLED);
+    boolean isServiceUsedCapacityWatermarkCheckEnabled = conf.get(SERVICE_USED_CAPACITY_WATERMARK_CHECK_ENABLED);
     for (int i = 0; i < storageBasePaths.size(); i++) {
       final int idx = i;
       String storagePath = storageBasePaths.get(i);
@@ -132,6 +134,9 @@ public class LocalStorageManager extends SingleStorageManager {
                       .localStorageMedia(storageType);
               if (isDiskCapacityWatermarkCheckEnabled) {
                 builder.enableDiskCapacityWatermarkCheck();
+              }
+              if (isServiceUsedCapacityWatermarkCheckEnabled) {
+                builder.enableServiceUsedCapacityWatermarkCheck();
               }
               localStorageArray[idx] = builder.build();
               successCount.incrementAndGet();

@@ -48,7 +48,9 @@ public class LocalStorage extends AbstractStorage {
   private final long diskCapacity;
   private volatile long diskFree;
   // for test cases
-  private boolean enableDiskCapacityCheck = false;
+  private boolean enableDiskCapacityCheck = true;
+
+  private boolean enableServiceUsedCapacityCheck = false;
 
   private long capacity;
   private final String basePath;
@@ -67,6 +69,10 @@ public class LocalStorage extends AbstractStorage {
     this.capacity = builder.capacity;
     this.media = builder.media;
     this.enableDiskCapacityCheck = builder.enableDiskCapacityWatermarkCheck;
+    this.enableServiceUsedCapacityCheck = builder.enableServiceUsedCapacityWatermarkCheck;
+
+    LOG.info("Init local storage: {}. Enable diskCapacityCheck: {}, enable serviceUsedCapacityCheck: {}",
+        basePath, enableDiskCapacityCheck, enableServiceUsedCapacityCheck);
 
     File baseFolder = new File(basePath);
     try {
@@ -193,7 +199,8 @@ public class LocalStorage extends AbstractStorage {
       }
     }
     isSpaceEnough =
-        serviceUsedCapacityCheck && (enableDiskCapacityCheck ? diskUsedCapacityCheck : true);
+        (enableServiceUsedCapacityCheck ? serviceUsedCapacityCheck : true)
+            && (enableDiskCapacityCheck ? diskUsedCapacityCheck : true);
     return isSpaceEnough && !isCorrupted;
   }
 
@@ -300,6 +307,7 @@ public class LocalStorage extends AbstractStorage {
     private String basePath;
     private StorageMedia media;
     private boolean enableDiskCapacityWatermarkCheck;
+    private boolean enableServiceUsedCapacityWatermarkCheck;
 
     private Builder() {}
 
@@ -335,6 +343,11 @@ public class LocalStorage extends AbstractStorage {
 
     public Builder enableDiskCapacityWatermarkCheck() {
       this.enableDiskCapacityWatermarkCheck = true;
+      return this;
+    }
+
+    public Builder enableServiceUsedCapacityWatermarkCheck() {
+      this.enableServiceUsedCapacityWatermarkCheck = true;
       return this;
     }
 
