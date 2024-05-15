@@ -267,11 +267,23 @@ public abstract class RssShuffleManagerBase implements RssShuffleManagerInterfac
       sparkConf.set(
           sparkTaskIdBitsKey, rssConf.getValue(RssClientConf.BLOCKID_TASK_ATTEMPT_ID_BITS));
     } else {
-      // use default max partitions
-      sparkConf.set(
-          RssSparkConfig.RSS_MAX_PARTITIONS.key(),
-          RssSparkConfig.RSS_MAX_PARTITIONS.defaultValueString());
-      configureBlockIdLayoutFromMaxPartitions(sparkConf, rssConf, maxFailures, speculation);
+      // to be compatible with the older shuffleServer version.
+      rssConf.set(RssClientConf.BLOCKID_SEQUENCE_NO_BITS, 16);
+      rssConf.set(RssClientConf.BLOCKID_PARTITION_ID_BITS, 24);
+      rssConf.set(RssClientConf.BLOCKID_TASK_ATTEMPT_ID_BITS, 23);
+      LOG.info("Apply the legacy blockId layout. sequenceNoBits:{}, partitionIdBits:{}, taskAttemptIdBits:{}",
+          rssConf.get(RssClientConf.BLOCKID_SEQUENCE_NO_BITS),
+          rssConf.get(RssClientConf.BLOCKID_PARTITION_ID_BITS),
+          rssConf.get(RssClientConf.BLOCKID_TASK_ATTEMPT_ID_BITS));
+      configureBlockIdLayoutFromLayoutConfig(sparkConf, rssConf, maxFailures, speculation);
+
+      /**
+       * // use default max partitions
+       * sparkConf.set(
+       *     RssSparkConfig.RSS_MAX_PARTITIONS.key(),
+       *     RssSparkConfig.RSS_MAX_PARTITIONS.defaultValueString());
+       * configureBlockIdLayoutFromMaxPartitions(sparkConf, rssConf, maxFailures, speculation);
+       */
     }
   }
 
