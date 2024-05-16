@@ -22,7 +22,7 @@ import java.util.Map;
 public abstract class AbstractRssClientConfApplyStrategy {
   protected DynamicClientConfService dynamicClientConfService;
 
-  protected AbstractRssClientConfApplyStrategy(DynamicClientConfService dynamicClientConfService) {
+  public AbstractRssClientConfApplyStrategy(DynamicClientConfService dynamicClientConfService) {
     this.dynamicClientConfService = dynamicClientConfService;
   }
 

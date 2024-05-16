@@ -30,6 +30,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -161,6 +162,10 @@ public class RssShuffleManager extends RssShuffleManagerBase {
   private boolean blockIdSelfManagedEnabled;
 
   public RssShuffleManager(SparkConf conf, boolean isDriver) {
+    this(conf, isDriver, sparkConf -> fetchAndApplyDynamicConf(sparkConf));
+  }
+
+  public RssShuffleManager(SparkConf conf, boolean isDriver, Consumer<SparkConf> fetchAndApplyDynamicConfFunc) {
     this.sparkConf = conf;
     boolean supportsRelocation =
         Optional.ofNullable(SparkEnv.get())
@@ -177,7 +182,8 @@ public class RssShuffleManager extends RssShuffleManagerBase {
 
     // fetch client conf and apply them if necessary
     if (isDriver && this.dynamicConfEnabled) {
-      fetchAndApplyDynamicConf(sparkConf);
+      assert fetchAndApplyDynamicConfFunc != null;
+      fetchAndApplyDynamicConfFunc.accept(sparkConf);
     }
     RssSparkShuffleUtils.validateRssClientConf(sparkConf);
 

@@ -13,6 +13,10 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.spark.ShuffleDependency;
 import org.apache.spark.SparkConf;
 import org.apache.spark.TaskContext;
+import org.apache.uniffle.client.factory.CoordinatorClientFactory;
+import org.apache.uniffle.client.request.RssFetchClientConfRequest;
+import org.apache.uniffle.client.response.RssFetchClientConfResponse;
+import org.apache.uniffle.common.ClientType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Tuple2;
@@ -54,13 +58,39 @@ public class QiyiRssShuffleManager implements ShuffleManager {
     }
   }
 
+  public void fetchAndApplyDynamicConf(SparkConf sparkConf) {
+    int timeoutMs =
+        sparkConf.getInt(
+            RssSparkConfig.RSS_ACCESS_TIMEOUT_MS.key(),
+            RssSparkConfig.RSS_ACCESS_TIMEOUT_MS.defaultValue().get());
+    String user = "EMPTY";
+    try {
+      user = UserGroupInformation.getCurrentUser().getShortUserName();
+    } catch (Exception e) {
+      LOG.error("Errors on getting current user.", e);
+    }
+    Map<String, String> extraProperties = getAppInfo();
+    RssFetchClientConfRequest request =
+        new RssFetchClientConfRequest(timeoutMs, user, extraProperties);
+    for (CoordinatorClient client : coordinatorClients) {
+      RssFetchClientConfResponse response = client.fetchClientConf(request);
+      if (response.getStatusCode() == StatusCode.SUCCESS) {
+        LOG.info("Success to get conf from {}", client.getDesc());
+        RssSparkShuffleUtils.applyDynamicClientConf(sparkConf, response.getClientConf());
+        break;
+      } else {
+        LOG.warn("Fail to get conf from {}", client.getDesc());
+      }
+    }
+  }
+
   private ShuffleManager createShuffleManagerInDriver() throws RssException {
     ShuffleManager shuffleManager;
 
     boolean canAccess = tryAccessCluster();
     if (canAccess) {
       try {
-        shuffleManager = new RssShuffleManager(sparkConf, true);
+        shuffleManager = new RssShuffleManager(sparkConf, true, sparkConf -> fetchAndApplyDynamicConf(sparkConf));
         sparkConf.set(RssSparkConfig.RSS_ENABLED.key(), "true");
         sparkConf.set("spark.shuffle.manager", RssShuffleManager.class.getCanonicalName());
         LOG.info("Use RssShuffleManager of Uniffle");
