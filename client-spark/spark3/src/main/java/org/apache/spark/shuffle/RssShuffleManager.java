@@ -419,7 +419,7 @@ public class RssShuffleManager extends RssShuffleManagerBase {
             id.get(), defaultRemoteStorage, dynamicConfEnabled, storageType, shuffleWriteClient);
 
     Set<String> assignmentTags = RssSparkShuffleUtils.getAssignmentTags(sparkConf);
-    if (!useCompatibleMode) {
+    if (false) {
       ClientUtils.validateClientType(clientType);
       assignmentTags.add(clientType);
     }
