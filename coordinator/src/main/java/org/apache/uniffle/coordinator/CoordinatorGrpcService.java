@@ -329,7 +329,11 @@ public class CoordinatorGrpcService extends CoordinatorServerGrpc.CoordinatorSer
           coordinatorServer.getClientConfApplyManager().apply(rssClientConfFetchInfo);
       for (Map.Entry<String, String> kv : clientConfigs.entrySet()) {
         builder.addClientConf(
-            ClientConfItem.newBuilder().setKey(kv.getKey()).setValue(kv.getValue()).build());
+            ClientConfItem
+                .newBuilder()
+                .setKey(kv.getKey())
+                .setValue(String.valueOf(kv.getValue()))
+                .build());
       }
     }
     response = builder.build();
