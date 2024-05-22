@@ -171,10 +171,12 @@ public class LocalStorage extends AbstractStorage {
     boolean serviceUsedCapacityCheck;
     boolean diskUsedCapacityCheck;
 
+    boolean prev = isSpaceEnough;
+
     if (isSpaceEnough) {
       serviceUsedCapacityCheck =
           metaData.getDiskSize().doubleValue() * 100 / capacity < highWaterMarkOfWrite;
-      if (!serviceUsedCapacityCheck) {
+      if (!serviceUsedCapacityCheck && enableServiceUsedCapacityCheck) {
         LOG.warn("The local storage: {} can't be written due to service used capacity > high watermark:{}",
             getStoragePath(), highWaterMarkOfWrite);
       }
@@ -187,7 +189,7 @@ public class LocalStorage extends AbstractStorage {
     } else {
       serviceUsedCapacityCheck =
           metaData.getDiskSize().doubleValue() * 100 / capacity < lowWaterMarkOfWrite;
-      if (serviceUsedCapacityCheck) {
+      if (serviceUsedCapacityCheck && enableServiceUsedCapacityCheck) {
         LOG.warn("The local storage: {} become being written due to service used capacity < low watermark:{}",
             getStoragePath(), lowWaterMarkOfWrite);
       }
@@ -201,6 +203,10 @@ public class LocalStorage extends AbstractStorage {
     isSpaceEnough =
         (enableServiceUsedCapacityCheck ? serviceUsedCapacityCheck : true)
             && (enableDiskCapacityCheck ? diskUsedCapacityCheck : true);
+
+    if (prev != isSpaceEnough) {
+      LOG.info("LocalStorage canWrite Status of [{}] changes from {} to {}", basePath, prev, isSpaceEnough);
+    }
     return isSpaceEnough && !isCorrupted;
   }
 
