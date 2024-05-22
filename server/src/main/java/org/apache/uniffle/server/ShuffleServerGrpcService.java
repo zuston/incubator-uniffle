@@ -765,9 +765,16 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
         builder.setDataFileLen(shuffleIndexResult.getDataFileLen());
         reply = builder.build();
       } catch (FileNotFoundException indexFileNotFoundException) {
+        boolean partitionExists = false;
+        try {
+          partitionExists = shuffleServer.getShuffleTaskManager().getShuffleTaskInfo(appId).existPartition(shuffleId, partitionId);
+        } catch (Exception e) {
+          LOG.error("Errors on checking partitionId. appId: {}", appId, e);
+        }
         LOG.warn(
-            "Index file for {} is not found, maybe the data has been flushed to cold storage.",
+            "Index file for {} is not found, maybe the data has been flushed to cold storage. partition existence: {}",
             requestInfo,
+            partitionExists,
             indexFileNotFoundException);
         reply = GetLocalShuffleIndexResponse.newBuilder().setStatus(status.toProto()).build();
       } catch (Exception e) {

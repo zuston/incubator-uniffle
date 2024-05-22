@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.common.collect.Sets;
+import java.util.stream.Collectors;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -162,6 +163,30 @@ public class ShuffleTaskInfo {
       return 0L;
     }
     return size;
+  }
+
+  public boolean existPartition(int shuffleId, int partitionId) {
+    try {
+      Map<Integer, Long> partitions = partitionDataSizes.get(shuffleId);
+      if (partitions == null) {
+        LOGGER.warn("Non-existence of appId: {}, shuffleId: {}. This should not happen", appId, shuffleId);
+        return false;
+      }
+
+      LOGGER.info("Existing partitionIds: {} of appId: {}, shuffleId: {}.", partitions.keySet().stream().limit(100).collect(Collectors.toSet()), appId, shuffleId);
+
+      Long size = partitions.get(partitionId);
+      if (size == null) {
+        LOGGER.warn("Non-existence of partition:{} for appId: {}. shuffleId: {}", partitionId, appId, shuffleId);
+        return false;
+      }
+
+      LOGGER.info("Size: {} of partition:{} for appId: {}. shuffleId: {}", size, partitionId, appId, shuffleId);
+      return true;
+    } catch (Exception e) {
+      LOGGER.error("Errors on checking partition size for appId: {}", appId, e);
+      return false;
+    }
   }
 
   public boolean hasHugePartition() {
