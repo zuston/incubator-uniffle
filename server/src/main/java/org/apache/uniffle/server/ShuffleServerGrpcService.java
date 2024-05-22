@@ -767,6 +767,7 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
       } catch (FileNotFoundException indexFileNotFoundException) {
         boolean partitionExists = false;
         try {
+          ShuffleServerMetrics.counterLocalFileIndexNotFound.inc();
           partitionExists = shuffleServer.getShuffleTaskManager().getShuffleTaskInfo(appId).existPartition(shuffleId, partitionId);
         } catch (Exception e) {
           LOG.error("Errors on checking partitionId. appId: {}", appId, e);
