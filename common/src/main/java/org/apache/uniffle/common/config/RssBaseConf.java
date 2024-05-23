@@ -232,7 +232,7 @@ public class RssBaseConf extends RssConf {
       ConfigOptions.key("rss.reconfigure.interval.sec")
           .longType()
           .checkValue(ConfigUtils.POSITIVE_LONG_VALIDATOR, "The value must be posite long")
-          .defaultValue(5L)
+          .defaultValue(60L)
           .withDescription("Reconfigure check interval.");
 
   public static final ConfigOption<Integer> RSS_RANDOM_PORT_MIN =
