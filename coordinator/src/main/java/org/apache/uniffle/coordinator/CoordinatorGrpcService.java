@@ -119,9 +119,14 @@ public class CoordinatorGrpcService extends CoordinatorServerGrpc.CoordinatorSer
     final int estimateTaskConcurrency = request.getEstimateTaskConcurrency();
     final Set<String> faultyServerIds = new HashSet<>(request.getFaultyServerIdsList());
 
+    if (partitionNum == 1 && partitionNumPerRange == 1 && estimateTaskConcurrency == 1) {
+      LOG.info("AppId: {}, ShuffleId: {} triggers the partition reassign", appId, shuffleId);
+    }
+
     LOG.info(
         "Request of getShuffleAssignments for appId[{}], shuffleId[{}], partitionNum[{}], "
-            + " partitionNumPerRange[{}], replica[{}], requiredTags[{}], requiredShuffleServerNumber[{}],faultyServerIds[{}]",
+            + " partitionNumPerRange[{}], replica[{}], requiredTags[{}], requiredShuffleServerNumber[{}], "
+            + " estimateTaskConcurrency[{}], faultyServerIds[{}]",
         appId,
         shuffleId,
         partitionNum,
@@ -129,6 +134,7 @@ public class CoordinatorGrpcService extends CoordinatorServerGrpc.CoordinatorSer
         replica,
         requiredTags,
         requiredShuffleServerNumber,
+        estimateTaskConcurrency,
         faultyServerIds.size());
 
     GetShuffleAssignmentsResponse response;
