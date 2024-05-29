@@ -99,7 +99,7 @@ public class RssClientConf {
   public static final ConfigOption<Long> RPC_TIMEOUT_MS =
       ConfigOptions.key("rss.client.rpc.timeout.ms")
           .longType()
-          .defaultValue(60 * 1000L)
+          .defaultValue(300 * 1000L)
           .withDescription("Timeout in milliseconds for RPC calls.");
 
   public static final ConfigOption<Integer> RPC_MAX_ATTEMPTS =
