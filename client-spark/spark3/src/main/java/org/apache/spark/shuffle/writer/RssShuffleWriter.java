@@ -387,7 +387,11 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
       String errorMsg =
           "Potential record loss may have occurred while preparing to send blocks for task["
               + taskId
-              + "]";
+              + "], recordCounter(expected:"
+              + recordCount
+              + ", actual:"
+              + bufferManager.getRecordCount()
+              + ")";
       throw new RssSendFailedException(errorMsg);
     }
   }
