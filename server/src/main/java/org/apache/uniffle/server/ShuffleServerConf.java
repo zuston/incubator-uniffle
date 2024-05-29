@@ -315,7 +315,7 @@ public class ShuffleServerConf extends RssBaseConf {
   public static final ConfigOption<Long> HEALTH_CHECKER_LOCAL_STORAGE_EXECUTE_TIMEOUT =
       ConfigOptions.key("rss.server.health.checker.localStorageExecutionTimeoutMS")
           .longType()
-          .defaultValue(1000 * 60L)
+          .defaultValue(1000 * 300L)
           .withDescription(
               "The health checker for LocalStorageChecker execution timeout (Unit: ms). Default value is 1min");
 
