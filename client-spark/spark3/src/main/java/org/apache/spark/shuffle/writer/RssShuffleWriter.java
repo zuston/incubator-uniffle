@@ -384,6 +384,9 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
 
   private void checkSentRecordCount(long recordCount) {
     if (recordCount != bufferManager.getRecordCount()) {
+      if (bufferManager.getBuffers().size() > 0) {
+        LOG.error("Has remaining blocks to send. This should not happen");
+      }
       String errorMsg =
           "Potential record loss may have occurred while preparing to send blocks for task["
               + taskId
