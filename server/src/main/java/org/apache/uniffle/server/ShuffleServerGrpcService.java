@@ -494,7 +494,7 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
           "Accepted blockIds report for {} blocks across {} partitions as shuffle result for task {}",
           expectedBlockCount,
           partitionToBlockIds.size(),
-          request);
+          requestInfo);
       int updatedBlockCount =
           shuffleServer
               .getShuffleTaskManager()
