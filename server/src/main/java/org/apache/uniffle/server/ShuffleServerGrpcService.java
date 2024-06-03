@@ -489,16 +489,23 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
         "appId[" + appId + "], shuffleId[" + shuffleId + "], taskAttemptId[" + taskAttemptId + "]";
 
     try {
-      if (LOG.isDebugEnabled()) {
-        LOG.info(
-            "Report "
-                + partitionToBlockIds.size()
-                + " blocks as shuffle result for the task of "
-                + requestInfo);
+      int expectedBlockCount = partitionToBlockIds.values().stream().mapToInt(x -> x.length).sum();
+      LOG.info(
+          "Accepted blockIds report for {} blocks across {} partitions as shuffle result for task {}",
+          expectedBlockCount,
+          partitionToBlockIds.size(),
+          request);
+      int updatedBlockCount =
+          shuffleServer
+              .getShuffleTaskManager()
+              .addFinishedBlockIds(appId, shuffleId, partitionToBlockIds, bitmapNum);
+      if (expectedBlockCount != updatedBlockCount) {
+        LOG.warn(
+            "Existing {} duplicated blockIds on blockId report for appId: {}, shuffleId: {}",
+            expectedBlockCount - updatedBlockCount,
+            appId,
+            shuffleId);
       }
-      shuffleServer
-          .getShuffleTaskManager()
-          .addFinishedBlockIds(appId, shuffleId, partitionToBlockIds, bitmapNum);
     } catch (Exception e) {
       status = StatusCode.INTERNAL_ERROR;
       msg = "error happened when report shuffle result, check shuffle server for detail";
