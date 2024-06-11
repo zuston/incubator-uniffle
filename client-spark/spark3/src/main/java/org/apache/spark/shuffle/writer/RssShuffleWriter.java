@@ -80,7 +80,7 @@ import org.apache.uniffle.client.request.RssReassignOnBlockSendFailureRequest;
 import org.apache.uniffle.client.request.RssReassignServersRequest;
 import org.apache.uniffle.client.request.RssReportShuffleWriteFailureRequest;
 import org.apache.uniffle.client.response.RssReassignOnBlockSendFailureResponse;
-import org.apache.uniffle.client.response.RssReassignServersReponse;
+import org.apache.uniffle.client.response.RssReassignServersResponse;
 import org.apache.uniffle.client.response.RssReportShuffleWriteFailureResponse;
 import org.apache.uniffle.common.ClientType;
 import org.apache.uniffle.common.ReceivingFailureServer;
@@ -640,8 +640,18 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
     String driver = rssConf.getString("driver.host", "");
     int port = rssConf.get(RssClientConf.SHUFFLE_MANAGER_GRPC_PORT);
     try (ShuffleManagerClient shuffleManagerClient = createShuffleManagerClient(driver, port)) {
+      String executorId = SparkEnv.get().executorId();
+      long taskAttemptId = taskContext.taskAttemptId();
+      int stageId = taskContext.stageId();
+      int stageAttemptNum = taskContext.stageAttemptNumber();
       RssReassignOnBlockSendFailureRequest request =
-          new RssReassignOnBlockSendFailureRequest(shuffleId, failurePartitionToServers);
+          new RssReassignOnBlockSendFailureRequest(
+              shuffleId,
+              failurePartitionToServers,
+              executorId,
+              taskAttemptId,
+              stageId,
+              stageAttemptNum);
       RssReassignOnBlockSendFailureResponse response =
           shuffleManagerClient.reassignOnBlockSendFailure(request);
       if (response.getStatusCode() != StatusCode.SUCCESS) {
@@ -873,11 +883,11 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
                   taskContext.stageAttemptNumber(),
                   shuffleId,
                   partitioner.numPartitions());
-          RssReassignServersReponse rssReassignServersReponse =
+          RssReassignServersResponse rssReassignServersResponse =
               shuffleManagerClient.reassignShuffleServers(rssReassignServersRequest);
           LOG.info(
               "Whether the reassignment is successful: {}",
-              rssReassignServersReponse.isNeedReassign());
+              rssReassignServersResponse.isNeedReassign());
           // since we are going to roll out the whole stage, mapIndex shouldn't matter, hence -1 is
           // provided.
           FetchFailedException ffe =
