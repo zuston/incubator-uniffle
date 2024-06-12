@@ -649,6 +649,7 @@ message ReportTaskFailedRequest {
   string taskId = 3;
   int64 taskAttemptId = 4;
   string exceptionMessage = 5;
+  string user = 6;
 }
 
 message ReportTaskFailedResponse {

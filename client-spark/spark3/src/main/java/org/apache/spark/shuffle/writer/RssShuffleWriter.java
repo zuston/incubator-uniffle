@@ -49,6 +49,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.spark.Partitioner;
 import org.apache.spark.ShuffleDependency;
 import org.apache.spark.SparkConf;
@@ -295,11 +296,16 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
         // callback to coordinator side
         coordinatorClients =
             RssSparkShuffleUtils.createCoordinatorClients(SparkEnv.get().conf());
+        String user = "";
+        try {
+          user = UserGroupInformation.getCurrentUser().getShortUserName();
+        } catch (Exception e) {
+          throw new RssException("Errors on getting current user.", e);
+        }
         RssReportTaskFailedRequest request = new RssReportTaskFailedRequest(
             appId, shuffleId, taskId, taskAttemptId, Optional.ofNullable(
             String.format("%s:%s", exception.getClass().getSimpleName(), exception.getMessage())
-        ).orElse("EMPTY MSG")
-        );
+        ).orElse("EMPTY MSG"), user);
         for (CoordinatorClient client : coordinatorClients) {
           RssReportTaskFailedResponse response = client.reportTaskFailed(request);
           if (response.getStatusCode() == StatusCode.SUCCESS) {

@@ -6,14 +6,16 @@ public class RssReportTaskFailedRequest {
   private String taskId;
   private long taskAttemptId;
   private String exceptionMsg;
+  private String user;
 
   public RssReportTaskFailedRequest(String appId, int shuffleId, String taskId, long taskAttemptId,
-      String exceptionMsg) {
+      String exceptionMsg, String user) {
     this.appId = appId;
     this.shuffleId = shuffleId;
     this.taskAttemptId = taskAttemptId;
     this.taskId = taskId;
     this.exceptionMsg = exceptionMsg;
+    this.user = user;
   }
 
   public String getAppId() {
@@ -34,5 +36,9 @@ public class RssReportTaskFailedRequest {
 
   public String getExceptionMsg() {
     return exceptionMsg;
+  }
+
+  public String getUser() {
+    return user;
   }
 }

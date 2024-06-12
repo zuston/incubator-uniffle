@@ -126,7 +126,7 @@ public class CoordinatorMetrics {
 
     counterTotalQiyiAccessCheckerDeniedRequest = metricsManager.addCounter(TOTAL_QIYI_ACCESS_CHECKER_DENIED_REQUEST);
 
-    counterTotalFailedTaskReportNum = metricsManager.addCounter(TOTAL_FAILED_TASK_REPORT_NUM);
+    counterTotalFailedTaskReportNum = metricsManager.addCounter(TOTAL_FAILED_TASK_REPORT_NUM, "user");
     counterTotalAppWithFailedTasksNum = metricsManager.addCounter(TOTAL_FAILED_TASK_WITH_APP_NUM);
   }
 }

@@ -20,6 +20,7 @@ package org.apache.uniffle.coordinator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.stream.Collectors;
@@ -450,11 +451,15 @@ public class CoordinatorGrpcService extends CoordinatorServerGrpc.CoordinatorSer
     String taskId = request.getTaskId();
     long taskAttempt = request.getTaskAttemptId();
     String exceptionMsg = request.getExceptionMessage();
+    String user = request.getUser();
 
-    LOG.warn("Report failed task from client, appId: {}, shuffleId: {}, taskId: {}, "
-        + "taskAttemptId: {}, exceptionMsg: {}", appId, shuffleId, taskId, taskAttempt, exceptionMsg);
+    LOG.warn("Report failed task from client, appId: {}, shuffleId: {}, taskId: {}, user: {}, "
+        + "taskAttemptId: {}, exceptionMsg: {}", appId, shuffleId, taskId, user, taskAttempt, exceptionMsg);
 
-    CoordinatorMetrics.counterTotalFailedTaskReportNum.inc();
+    CoordinatorMetrics
+        .counterTotalFailedTaskReportNum
+        .labels(Optional.ofNullable(user).orElse("EMPTY"))
+        .inc();
 
     if (!appsWithFailedTasks.containsKey(appId)) {
       appsWithFailedTasks.put(appId, (byte) 0);

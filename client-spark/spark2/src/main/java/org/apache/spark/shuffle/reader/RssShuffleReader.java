@@ -30,6 +30,7 @@ import scala.runtime.AbstractFunction1;
 import scala.runtime.BoxedUnit;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.spark.Aggregator;
 import org.apache.spark.InterruptibleIterator;
 import org.apache.spark.ShuffleDependency;
@@ -136,8 +137,14 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
           try {
             // callback to coordinator side
             coordinatorClients = RssSparkShuffleUtils.createCoordinatorClients(SparkEnv.get().conf());
+            String user = "";
+            try {
+              user = UserGroupInformation.getCurrentUser().getShortUserName();
+            } catch (Exception exp) {
+              throw new RssException("Errors on getting current user.", exp);
+            }
             RssReportTaskFailedRequest request = new RssReportTaskFailedRequest(
-                appId, shuffleId, taskId, -1, e.getMessage()
+                appId, shuffleId, taskId, -1, e.getMessage(), user
             );
             for (CoordinatorClient client : coordinatorClients) {
               RssReportTaskFailedResponse response = client.reportTaskFailed(request);
