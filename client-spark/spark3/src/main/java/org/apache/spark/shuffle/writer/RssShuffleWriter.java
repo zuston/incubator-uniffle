@@ -669,6 +669,9 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
       }
       MutableShuffleHandleInfo handle = MutableShuffleHandleInfo.fromProto(response.getHandle());
       taskAttemptAssignment.update(handle);
+      LOG.info(
+          "Success to reassign. The latest available assignment is {}",
+          handle.getAvailablePartitionServersForWriter());
     } catch (Exception e) {
       throw new RssException(
           "Errors on reassign on block send failure. failure partition->servers : "
@@ -731,6 +734,8 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
     }
 
     processShuffleBlockInfos(resendCandidates);
+    LOG.info(
+        "Failed blocks have been resent to data pusher queue since reassignment has been finished successfully");
   }
 
   private void clearFailedBlockState(ShuffleBlockInfo block) {
