@@ -293,6 +293,10 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
     if (RssSparkConfig.toRssConf(SparkEnv.get().conf()).getBoolean(RSS_TASK_FAILED_CALLBACK_ENABLED)) {
       List<CoordinatorClient> coordinatorClients = null;
       try {
+        if (Thread.currentThread().isInterrupted()) {
+          LOG.info("Ignore reporting failure to coordinator as task has accepted interrupt signal.");
+          return;
+        }
         // callback to coordinator side
         coordinatorClients =
             RssSparkShuffleUtils.createCoordinatorClients(SparkEnv.get().conf());
