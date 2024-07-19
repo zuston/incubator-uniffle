@@ -466,7 +466,7 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
                               shuffleServerInfo, k -> Maps.newHashMap());
                       pToBlockIds.computeIfAbsent(partitionId, v -> Sets.newHashSet()).add(blockId);
                     });
-            partitionLengths[partitionId] += sbi.getUncompressLength();
+            partitionLengths[partitionId] += sbi.getLength();
           });
       return postBlockEvent(shuffleBlockInfoList);
     }
