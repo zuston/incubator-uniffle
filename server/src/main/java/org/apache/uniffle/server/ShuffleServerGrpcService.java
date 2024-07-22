@@ -490,7 +490,7 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
 
     try {
       int expectedBlockCount = partitionToBlockIds.values().stream().mapToInt(x -> x.length).sum();
-      LOG.info(
+      LOG.debug(
           "Accepted blockIds report for {} blocks across {} partitions as shuffle result for task {}",
           expectedBlockCount,
           partitionToBlockIds.size(),
