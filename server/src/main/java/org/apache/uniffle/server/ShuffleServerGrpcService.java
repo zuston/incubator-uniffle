@@ -240,7 +240,7 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
                 + "], shuffleId["
                 + shuffleId
                 + "]";
-        LOG.warn(errorMsg);
+        LOG.debug(errorMsg);
         responseMessage = errorMsg;
         reply =
             SendShuffleDataResponse.newBuilder()

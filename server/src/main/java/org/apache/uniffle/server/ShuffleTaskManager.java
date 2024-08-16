@@ -827,7 +827,7 @@ public class ShuffleTaskManager {
           // move release memory code down to here as the requiredBuffer could be consumed during
           // removing processing.
           shuffleBufferManager.releaseMemory(info.getRequireSize(), false, true);
-          LOG.info("Remove expired preAllocatedBuffer " + requireId);
+          LOG.debug("Remove expired preAllocatedBuffer " + requireId);
         } else {
           LOG.info("PreAllocatedBuffer[id={}] has already been removed", requireId);
         }
