@@ -42,6 +42,7 @@ import com.google.common.collect.Queues;
 import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.uniffle.common.ReconfigurableConfManager;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,7 +92,7 @@ public class ShuffleTaskManager {
   private AtomicLong requireBufferId = new AtomicLong(0);
   private ShuffleServerConf conf;
   private long appExpiredWithoutHB;
-  private long preAllocationExpired;
+  private ReconfigurableConfManager.Reconfigurable<Long> preAllocationExpired;
   private long commitCheckIntervalMax;
   private long leakShuffleDataCheckInterval;
   private long triggerFlushInterval;
@@ -121,7 +122,7 @@ public class ShuffleTaskManager {
     this.storageManager = storageManager;
     this.appExpiredWithoutHB = conf.getLong(ShuffleServerConf.SERVER_APP_EXPIRED_WITHOUT_HEARTBEAT);
     this.commitCheckIntervalMax = conf.getLong(ShuffleServerConf.SERVER_COMMIT_CHECK_INTERVAL_MAX);
-    this.preAllocationExpired = conf.getLong(ShuffleServerConf.SERVER_PRE_ALLOCATION_EXPIRED);
+    this.preAllocationExpired = ReconfigurableConfManager.register(conf, ShuffleServerConf.SERVER_PRE_ALLOCATION_EXPIRED);
     this.leakShuffleDataCheckInterval =
         conf.getLong(ShuffleServerConf.SERVER_LEAK_SHUFFLE_DATA_CHECK_INTERVAL);
     this.triggerFlushInterval = conf.getLong(ShuffleServerConf.SERVER_TRIGGER_FLUSH_CHECK_INTERVAL);
@@ -130,8 +131,8 @@ public class ShuffleTaskManager {
         ThreadUtils.getDaemonSingleThreadScheduledExecutor("checkResource");
     scheduledExecutorService.scheduleAtFixedRate(
         this::preAllocatedBufferCheck,
-        preAllocationExpired / 2,
-        preAllocationExpired / 2,
+        preAllocationExpired.get() / 2,
+        preAllocationExpired.get() / 2,
         TimeUnit.MILLISECONDS);
     this.expiredAppCleanupExecutorService =
         ThreadUtils.getDaemonSingleThreadScheduledExecutor("expiredAppCleaner");
@@ -816,7 +817,7 @@ public class ShuffleTaskManager {
       long current = System.currentTimeMillis();
       List<Long> removeIds = Lists.newArrayList();
       for (PreAllocatedBufferInfo info : requireBufferIds.values()) {
-        if (current - info.getTimestamp() > preAllocationExpired) {
+        if (current - info.getTimestamp() > preAllocationExpired.get()) {
           removeIds.add(info.getRequireId());
         }
       }
