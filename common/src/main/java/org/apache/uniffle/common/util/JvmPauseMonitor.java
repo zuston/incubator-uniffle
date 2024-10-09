@@ -68,9 +68,13 @@ public class JvmPauseMonitor implements Closeable {
   private Thread monitorThread;
   private volatile boolean shouldRun = true;
 
+  private SlidingTimeWindow slidingTimeWindow;
+  private static final String SLIDING_TIME_WINDOW_KEY = "jvm.pause.slidingWindow.ms";
+
   public JvmPauseMonitor(RssConf rssConf) {
     this.warnThresholdMs = rssConf.getLong(WARN_THRESHOLD_KEY, WARN_THRESHOLD_DEFAULT);
     this.infoThresholdMs = rssConf.getLong(INFO_THRESHOLD_KEY, INFO_THRESHOLD_DEFAULT);
+    this.slidingTimeWindow = new SlidingTimeWindow(rssConf.getLong(SLIDING_TIME_WINDOW_KEY, 5 * 60 * 1000L));
   }
 
   public void start() {
@@ -94,20 +98,27 @@ public class JvmPauseMonitor implements Closeable {
     return totalGcExtraSleepTime;
   }
 
+  public SlidingTimeWindow getSlidingTimeWindow() {
+    return slidingTimeWindow;
+  }
+
   private String formatMessage(
       long extraSleepTime,
       Map<String, GcTimes> gcTimesAfterSleep,
       Map<String, GcTimes> gcTimesBeforeSleep) {
-
     Set<String> gcBeanNames =
         Sets.intersection(gcTimesAfterSleep.keySet(), gcTimesBeforeSleep.keySet());
     List<String> gcDiffs = Lists.newArrayList();
+    int gcCount = 0;
     for (String name : gcBeanNames) {
       GcTimes diff = gcTimesAfterSleep.get(name).subtract(gcTimesBeforeSleep.get(name));
       if (diff.gcCount != 0) {
         gcDiffs.add("GC pool '" + name + "' had collection(s): " + diff.toString());
       }
+      gcCount += diff.gcCount;
     }
+    GCEvent event = new GCEvent(gcCount, extraSleepTime);
+    slidingTimeWindow.addEvent(event);
 
     String ret =
         "Detected pause in JVM or host machine (eg GC): "

@@ -101,7 +101,7 @@ public class ShuffleServer {
   private Future<?> decommissionFuture;
   private boolean nettyServerEnabled;
   private StreamServer streamServer;
-  private JvmPauseMonitor jvmPauseMonitor;
+  public static JvmPauseMonitor jvmPauseMonitor;
 
   public ShuffleServer(ShuffleServerConf shuffleServerConf) throws Exception {
     this.shuffleServerConf = shuffleServerConf;
