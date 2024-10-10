@@ -16,7 +16,7 @@ public class GCDurationChecker extends Checker {
     public GCDurationChecker(ShuffleServerConf conf) {
         super(conf);
         this.slidingTimeWindow = ShuffleServer.jvmPauseMonitor.getSlidingTimeWindow();
-        this.gcDurationThresholdMillis = conf.getLong("rss.server.health.checker.gcDurationChecker.healthyDurationMillis", 40 * 60 * 1000L);
+        this.gcDurationThresholdMillis = conf.getLong("rss.server.health.checker.gcDurationChecker.healthyDurationMillis", 40 * 1000L);
     }
 
     // only for test
@@ -34,6 +34,7 @@ public class GCDurationChecker extends Checker {
         }
 
         long duration = slidingTimeWindow.getTotalGCDurationMillis();
+        LOGGER.debug("gcCount: {}, gcDuration: {}(ms), threshold: {}(ms)", slidingTimeWindow.getCount(), duration, gcDurationThresholdMillis);
         if (duration > gcDurationThresholdMillis) {
             this.isHealthy = false;
             LOGGER.error("Detected GC duration {} > {} in one sliding window. Make it unhealthy!", duration, gcDurationThresholdMillis);
