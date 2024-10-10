@@ -159,7 +159,7 @@ public class ReconfigurableConfManager<T> {
     RssConf conf;
     ConfigOption<T> option;
 
-    FixedReconfigurable(RssConf conf, ConfigOption<T> option) {
+    public FixedReconfigurable(RssConf conf, ConfigOption<T> option) {
       this.conf = conf;
       this.option = option;
     }

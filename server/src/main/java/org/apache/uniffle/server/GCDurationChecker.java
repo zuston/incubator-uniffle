@@ -1,6 +1,9 @@
 package org.apache.uniffle.server;
 
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.uniffle.common.ReconfigurableConfManager;
+import org.apache.uniffle.common.config.ConfigOption;
+import org.apache.uniffle.common.config.ConfigOptions;
 import org.apache.uniffle.common.util.SlidingTimeWindow;
 
 import org.slf4j.Logger;
@@ -11,12 +14,17 @@ public class GCDurationChecker extends Checker {
     private final SlidingTimeWindow slidingTimeWindow;
     private boolean isHealthy = true;
 
-    private final long gcDurationThresholdMillis;
+    private final ReconfigurableConfManager.Reconfigurable<Long> gcDurationThresholdMillis;
+
+    private static final ConfigOption<Long> OPTION = ConfigOptions.key("rss.server.health.checker.gcDurationChecker.healthyDurationMillis")
+        .longType()
+        .defaultValue(40 * 1000L);
 
     public GCDurationChecker(ShuffleServerConf conf) {
         super(conf);
         this.slidingTimeWindow = ShuffleServer.jvmPauseMonitor.getSlidingTimeWindow();
-        this.gcDurationThresholdMillis = conf.getLong("rss.server.health.checker.gcDurationChecker.healthyDurationMillis", 40 * 1000L);
+
+        this.gcDurationThresholdMillis = ReconfigurableConfManager.register(conf, OPTION);
     }
 
     // only for test
@@ -24,7 +32,12 @@ public class GCDurationChecker extends Checker {
     public GCDurationChecker(SlidingTimeWindow timeWindow, long gcDurationThresholdMillis) {
         super(new ShuffleServerConf());
         this.slidingTimeWindow = timeWindow;
-        this.gcDurationThresholdMillis = gcDurationThresholdMillis;
+        this.gcDurationThresholdMillis = new ReconfigurableConfManager.FixedReconfigurable<>(
+            new ShuffleServerConf(),
+            ConfigOptions.key("rss.server.health.checker.gcDurationChecker.healthyDurationMillis")
+                .longType()
+                .defaultValue(gcDurationThresholdMillis)
+        );
     }
 
     @Override
@@ -34,10 +47,10 @@ public class GCDurationChecker extends Checker {
         }
 
         long duration = slidingTimeWindow.getTotalGCDurationMillis();
-        LOGGER.debug("gcCount: {}, gcDuration: {}(ms), threshold: {}(ms)", slidingTimeWindow.getCount(), duration, gcDurationThresholdMillis);
-        if (duration > gcDurationThresholdMillis) {
+        LOGGER.debug("gcCount: {}, gcDuration: {}(ms), threshold: {}(ms)", slidingTimeWindow.getCount(), duration, gcDurationThresholdMillis.get());
+        if (duration > gcDurationThresholdMillis.get()) {
             this.isHealthy = false;
-            LOGGER.error("Detected GC duration {} > {} in one sliding window. Make it unhealthy!", duration, gcDurationThresholdMillis);
+            LOGGER.error("Detected GC duration {} > {} in one sliding window. Make it unhealthy!", duration, gcDurationThresholdMillis.get());
             return false;
         }
         return true;
