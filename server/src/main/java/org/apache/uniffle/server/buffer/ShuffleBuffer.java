@@ -21,6 +21,7 @@ import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -52,6 +53,8 @@ public class ShuffleBuffer {
   // the strategy ensure that shuffle is in memory or storage
   private List<ShufflePartitionedBlock> blocks;
   private Map<Long, List<ShufflePartitionedBlock>> inFlushBlockMap;
+
+  private AtomicLong inFlushSize = new AtomicLong();
 
   public ShuffleBuffer(long capacity) {
     this.capacity = capacity;
@@ -103,9 +106,11 @@ public class ShuffleBuffer {
         () -> {
           this.clearInFlushBuffer(event.getEventId());
           spBlocks.forEach(spb -> spb.getData().release());
+          inFlushSize.addAndGet(-event.getSize());
         });
     inFlushBlockMap.put(eventId, inFlushedQueueBlocks);
     blocks.clear();
+    inFlushSize.addAndGet(size);
     size = 0;
     return event;
   }
@@ -371,5 +376,9 @@ public class ShuffleBuffer {
       }
     }
     return foundBlockId;
+  }
+
+  public long getInFlushSize() {
+    return inFlushSize.get();
   }
 }

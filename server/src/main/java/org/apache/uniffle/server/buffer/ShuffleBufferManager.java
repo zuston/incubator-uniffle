@@ -660,7 +660,8 @@ public class ShuffleBufferManager {
   public boolean limitHugePartition(
       String appId, int shuffleId, int partitionId, long usedPartitionDataSize) {
     if (usedPartitionDataSize > hugePartitionSizeThresholdRef.getSizeAsBytes()) {
-      long memoryUsed = getShuffleBufferEntry(appId, shuffleId, partitionId).getValue().getSize();
+      ShuffleBuffer shuffleBuffer = getShuffleBufferEntry(appId, shuffleId, partitionId).getValue();
+      long memoryUsed = shuffleBuffer.getSize() + shuffleBuffer.getInFlushSize();
       if (memoryUsed > hugePartitionMemoryLimitSize) {
         LOG.warn(
             "AppId: {}, shuffleId: {}, partitionId: {}, memory used: {}, "
