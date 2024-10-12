@@ -637,4 +637,9 @@ public class WriteBufferManager extends MemoryConsumer {
       Function<Integer, List<ShuffleServerInfo>> partitionAssignmentRetrieveFunc) {
     this.partitionAssignmentRetrieveFunc = partitionAssignmentRetrieveFunc;
   }
+
+  // Gluten needs this method.
+  public synchronized List<ShuffleBlockInfo> clear() {
+    return clear(bufferSpillRatio);
+  }
 }

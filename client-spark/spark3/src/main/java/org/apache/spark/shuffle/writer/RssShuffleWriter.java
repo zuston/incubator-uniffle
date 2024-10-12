@@ -121,7 +121,7 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
   private final ShuffleWriteClient shuffleWriteClient;
   private final Set<ShuffleServerInfo> shuffleServersForData;
   private final long[] partitionLengths;
-  private final boolean isMemoryShuffleEnabled;
+  protected final boolean isMemoryShuffleEnabled;
   private final Function<String, Boolean> taskFailureCallback;
   private final Set<Long> blockIds = Sets.newConcurrentHashSet();
   private TaskContext taskContext;
@@ -138,6 +138,8 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
 
   // Will be updated when the reassignment is triggered.
   private TaskAttemptAssignment taskAttemptAssignment;
+
+  private final ShuffleHandleInfo shuffleHandleInfo;
 
   private static final Set<StatusCode> STATUS_CODE_WITHOUT_BLOCK_RESEND =
       Sets.newHashSet(StatusCode.NO_REGISTER);
@@ -203,6 +205,7 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
     this.bitmapSplitNum = sparkConf.get(RssSparkConfig.RSS_CLIENT_BITMAP_SPLIT_NUM);
     this.serverToPartitionToBlockIds = Maps.newHashMap();
     this.shuffleWriteClient = shuffleWriteClient;
+    this.shuffleHandleInfo = shuffleHandleInfo;
     this.shuffleServersForData = shuffleHandleInfo.getServers();
     this.partitionLengths = new long[partitioner.numPartitions()];
     Arrays.fill(partitionLengths, 0);
@@ -231,8 +234,7 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
       ShuffleWriteClient shuffleWriteClient,
       RssShuffleHandle<K, V, C> rssHandle,
       Function<String, Boolean> taskFailureCallback,
-      TaskContext context,
-      ShuffleHandleInfo shuffleHandleInfo) {
+      TaskContext context) {
     this(
         appId,
         shuffleId,
@@ -244,7 +246,7 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
         shuffleWriteClient,
         rssHandle,
         taskFailureCallback,
-        shuffleHandleInfo,
+        shuffleManager.getShuffleHandleInfo(rssHandle),
         context);
     BufferManagerOptions bufferOptions = new BufferManagerOptions(sparkConf);
     final WriteBufferManager bufferManager =
@@ -260,7 +262,7 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
             this::processShuffleBlockInfos,
             this::getPartitionAssignedServers);
     this.bufferManager = bufferManager;
-    this.taskAttemptAssignment = new TaskAttemptAssignment(taskAttemptId, shuffleHandleInfo);
+    this.taskAttemptAssignment = new TaskAttemptAssignment(taskAttemptId, shuffleManager.getShuffleHandleInfo(rssHandle));
   }
 
   @VisibleForTesting
@@ -332,7 +334,7 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
     }
   }
 
-  private void writeImpl(Iterator<Product2<K, V>> records) {
+  protected void writeImpl(Iterator<Product2<K, V>> records) {
     List<ShuffleBlockInfo> shuffleBlockInfos;
     boolean isCombine = shuffleDependency.mapSideCombine();
     Function1<V, C> createCombiner = null;
@@ -944,6 +946,10 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
 
   public TaskAttemptAssignment getTaskAttemptAssignment() {
     return taskAttemptAssignment;
+  }
+
+  protected void internalCheckBlockSendResult() {
+    this.checkBlockSendResult(this.blockIds);
   }
 }
 
