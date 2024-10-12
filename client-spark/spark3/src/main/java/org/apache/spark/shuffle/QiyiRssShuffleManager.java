@@ -13,10 +13,8 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.spark.ShuffleDependency;
 import org.apache.spark.SparkConf;
 import org.apache.spark.TaskContext;
-import org.apache.uniffle.client.factory.CoordinatorClientFactory;
 import org.apache.uniffle.client.request.RssFetchClientConfRequest;
 import org.apache.uniffle.client.response.RssFetchClientConfResponse;
-import org.apache.uniffle.common.ClientType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Tuple2;
@@ -42,13 +40,22 @@ public class QiyiRssShuffleManager implements ShuffleManager {
   private final int accessTimeoutMs;
   private final SparkConf sparkConf;
 
+  private final boolean isGlutenEnabled;
+  private static final String GLUTEN_RSS_SHUFFLE_MANAGER = "org.apache.spark.shuffle.gluten.uniffle.UniffleShuffleManager";
+  private static final String GLUTEN_COLUMNAR_SHUFFLE_MANAGER = "org.apache.spark.shuffle.sort.ColumnarShuffleManager";
+  private static final String INTERNAL_SHUFFLE_MANAGER_KEY = "spark.rss.internal.shuffle.manager";
+
   public QiyiRssShuffleManager(SparkConf sparkConf, boolean isDriver) throws Exception {
     this.sparkConf = sparkConf;
     accessTimeoutMs = sparkConf.get(RssSparkConfig.RSS_ACCESS_TIMEOUT_MS);
+    isGlutenEnabled = sparkConf.get("spark.plugins", "").contains("org.apache.gluten.GlutenPlugin");
+
     if (isDriver) {
+      LOG.info("Creating driver side shuffle manager...");
       coordinatorClients = RssSparkShuffleUtils.createCoordinatorClients(sparkConf);
       delegate = createShuffleManagerInDriver();
     } else {
+      LOG.info("Creating executor side shuffle manager...");
       coordinatorClients = Collections.emptyList();
       delegate = createShuffleManagerInExecutor();
     }
@@ -56,6 +63,8 @@ public class QiyiRssShuffleManager implements ShuffleManager {
     if (delegate == null) {
       throw new RssException("Fail to create shuffle manager!");
     }
+
+    LOG.info("Delegated underlying shuffle manager: {}", delegate.getClass().getSimpleName());
   }
 
   public void fetchAndApplyDynamicConf(SparkConf sparkConf) {
@@ -90,21 +99,28 @@ public class QiyiRssShuffleManager implements ShuffleManager {
     boolean canAccess = tryAccessCluster();
     if (canAccess) {
       try {
-        shuffleManager = new RssShuffleManager(sparkConf, true, sparkConf -> fetchAndApplyDynamicConf(sparkConf));
         sparkConf.set(RssSparkConfig.RSS_ENABLED.key(), "true");
-        sparkConf.set("spark.shuffle.manager", RssShuffleManager.class.getCanonicalName());
-        LOG.info("Use RssShuffleManager of Uniffle");
+        String shuffleManagerCls = isGlutenEnabled ? GLUTEN_RSS_SHUFFLE_MANAGER : RssShuffleManager.class.getCanonicalName();
+        sparkConf.set(INTERNAL_SHUFFLE_MANAGER_KEY, shuffleManagerCls);
+        LOG.info("Use shuffle manager: {}", shuffleManagerCls);
+
+        if (shuffleManagerCls.equals(RssShuffleManager.class.getCanonicalName())) {
+          shuffleManager = new RssShuffleManager(sparkConf, true, this::fetchAndApplyDynamicConf);
+        } else {
+          shuffleManager = RssSparkShuffleUtils.loadShuffleManager(shuffleManagerCls, sparkConf, true);
+        }
         return shuffleManager;
       } catch (Exception exception) {
-        LOG.warn("Fail to create RssShuffleManager, fallback to SortShuffleManager {}", exception.getMessage());
+        LOG.warn("Fail to create RssShuffleManager, fallback to non-rss shuffle manager {}", exception.getMessage());
       }
     }
 
     try {
-      shuffleManager = RssSparkShuffleUtils.loadShuffleManager(Constants.SORT_SHUFFLE_MANAGER_NAME, sparkConf, true);
       sparkConf.set(RssSparkConfig.RSS_ENABLED.key(), "false");
-      sparkConf.set("spark.shuffle.manager", "sort");
-      LOG.info("Use SortShuffleManager of ExternalShuffleService");
+      String shuffleManagerCls = isGlutenEnabled ? GLUTEN_COLUMNAR_SHUFFLE_MANAGER : Constants.SORT_SHUFFLE_MANAGER_NAME;
+      shuffleManager = RssSparkShuffleUtils.loadShuffleManager(shuffleManagerCls, sparkConf, true);
+      sparkConf.set(INTERNAL_SHUFFLE_MANAGER_KEY, shuffleManagerCls);
+      LOG.info("Use shuffle manager: {}", shuffleManagerCls);
     } catch (Exception e) {
       throw new RssException(e.getMessage());
     }
@@ -201,23 +217,13 @@ public class QiyiRssShuffleManager implements ShuffleManager {
     return infos;
   }
 
-  private ShuffleManager createShuffleManagerInExecutor() throws RssException {
-    ShuffleManager shuffleManager;
-    // get useRSS from spark conf
-    boolean useRSS = sparkConf.get(RssSparkConfig.RSS_ENABLED);
-    if (useRSS) {
-      // Executor will not do any fallback
-      shuffleManager = new RssShuffleManager(sparkConf, false);
-      LOG.info("Use RssShuffleManager");
-    } else {
-      try {
-        shuffleManager = RssSparkShuffleUtils.loadShuffleManager(
-            Constants.SORT_SHUFFLE_MANAGER_NAME, sparkConf, false);
-        LOG.info("Use SortShuffleManager");
-      } catch (Exception e) {
-        throw new RssException(e.getMessage());
-      }
+  private ShuffleManager createShuffleManagerInExecutor() throws Exception {
+    String shuffleManagerCls = sparkConf.get(INTERNAL_SHUFFLE_MANAGER_KEY);
+    if (shuffleManagerCls == null) {
+      throw new RuntimeException("No such internal shuffle manager propagated from driver");
     }
+    LOG.info("Use shuffle manager: {}", shuffleManagerCls);
+    ShuffleManager shuffleManager = RssSparkShuffleUtils.loadShuffleManager(shuffleManagerCls, sparkConf, false);
     return shuffleManager;
   }
 
@@ -237,7 +243,13 @@ public class QiyiRssShuffleManager implements ShuffleManager {
       long mapId,
       TaskContext context,
       ShuffleWriteMetricsReporter metrics) {
-    return delegate.getWriter(handle, mapId, context, metrics);
+    RssShuffleHandle<K, V, V> rssHandle = (RssShuffleHandle<K, V, V>) handle;
+    if (rssHandle.getDependency().getClass().getSimpleName().equals("ColumnarShuffleDependency")) {
+      LOG.info("rss: Columnar shuffle dependency.");
+    }
+    ShuffleWriter shuffleWriter = delegate.getWriter(handle, mapId, context, metrics);
+    LOG.info("Writer: {}", shuffleWriter.getClass().getSimpleName());
+    return shuffleWriter;
   }
 
   @Override
