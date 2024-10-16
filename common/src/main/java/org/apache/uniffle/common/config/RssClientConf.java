@@ -17,6 +17,8 @@
 
 package org.apache.uniffle.common.config;
 
+import java.util.List;
+
 import org.apache.uniffle.common.ClientType;
 import org.apache.uniffle.common.ShuffleDataDistributionType;
 import org.apache.uniffle.common.compression.Codec;
@@ -210,4 +212,11 @@ public class RssClientConf {
           .defaultValue(false)
           .withDescription(
               "Whether to support rss client block send failure retry, default value is false.");
+
+  public static final ConfigOption<List<String>> RSS_CLIENT_EXTRA_JAVA_SYSTEM_PROPERTIES =
+      ConfigOptions.key("rss.client.extraJavaSystemProperties")
+          .stringType()
+          .asList()
+          .noDefaultValue()
+          .withDescription("the extra java properties could be configured by this option");
 }
