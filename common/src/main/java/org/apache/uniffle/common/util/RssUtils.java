@@ -49,7 +49,7 @@ import com.google.common.collect.Sets;
 import com.google.common.net.InetAddresses;
 import io.netty.channel.unix.Errors;
 import io.netty.util.internal.PlatformDependent;
-import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections.CollectionUtils;
 import org.eclipse.jetty.util.MultiException;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
