@@ -35,8 +35,7 @@ public class RssClientConfig {
   public static final String RSS_DATA_REPLICA_SKIP_ENABLED = "rss.data.replica.skip.enabled";
   public static final boolean RSS_DATA_REPLICA_SKIP_ENABLED_DEFAULT_VALUE = true;
   public static final String RSS_DATA_TRANSFER_POOL_SIZE = "rss.client.data.transfer.pool.size";
-  public static final int RSS_DATA_TRANFER_POOL_SIZE_DEFAULT_VALUE =
-      Runtime.getRuntime().availableProcessors();
+  public static final int RSS_DATA_TRANFER_POOL_SIZE_DEFAULT_VALUE = 20;
   public static final String RSS_DATA_COMMIT_POOL_SIZE = "rss.client.data.commit.pool.size";
   public static final int RSS_DATA_COMMIT_POOL_SIZE_DEFAULT_VALUE = -1;
   public static final String RSS_HEARTBEAT_INTERVAL = "rss.heartbeat.interval";
