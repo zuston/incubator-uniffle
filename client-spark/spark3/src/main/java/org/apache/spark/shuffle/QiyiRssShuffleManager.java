@@ -243,10 +243,6 @@ public class QiyiRssShuffleManager implements ShuffleManager {
       long mapId,
       TaskContext context,
       ShuffleWriteMetricsReporter metrics) {
-    RssShuffleHandle<K, V, V> rssHandle = (RssShuffleHandle<K, V, V>) handle;
-    if (rssHandle.getDependency().getClass().getSimpleName().equals("ColumnarShuffleDependency")) {
-      LOG.info("rss: Columnar shuffle dependency.");
-    }
     ShuffleWriter shuffleWriter = delegate.getWriter(handle, mapId, context, metrics);
     LOG.info("Writer: {}", shuffleWriter.getClass().getSimpleName());
     return shuffleWriter;
