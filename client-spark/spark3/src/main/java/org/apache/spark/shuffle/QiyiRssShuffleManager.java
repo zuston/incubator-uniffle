@@ -279,6 +279,7 @@ public class QiyiRssShuffleManager implements ShuffleManager {
           int.class,
           TaskContext.class,
           ShuffleReadMetricsReporter.class).invoke(
+                  delegate,
           handle,
           startMapIndex,
           endMapIndex,
@@ -312,6 +313,7 @@ public class QiyiRssShuffleManager implements ShuffleManager {
           int.class,
           TaskContext.class,
           ShuffleReadMetricsReporter.class).invoke(
+                  delegate,
           handle,
           startMapIndex,
           endMapIndex,
