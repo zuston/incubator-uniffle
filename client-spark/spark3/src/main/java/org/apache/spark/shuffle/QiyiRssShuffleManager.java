@@ -268,6 +268,9 @@ public class QiyiRssShuffleManager implements ShuffleManager {
       int endPartition,
       TaskContext context,
       ShuffleReadMetricsReporter metrics) {
+    if (handle != null) {
+      LOG.info("Reader handle: {}", handle.getClass().getSimpleName());
+    }
     ShuffleReader<K, C> reader = null;
     try {
       reader = (ShuffleReader<K, C>)delegate.getClass().getDeclaredMethod(
