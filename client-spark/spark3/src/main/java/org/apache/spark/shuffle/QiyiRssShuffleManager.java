@@ -273,7 +273,7 @@ public class QiyiRssShuffleManager implements ShuffleManager {
     }
     ShuffleReader<K, C> reader = null;
     try {
-      reader = (ShuffleReader<K, C>)delegate.getClass().getDeclaredMethod(
+      reader = (ShuffleReader<K, C>)delegate.getClass().getMethod(
           "getReader",
           ShuffleHandle.class,
           int.class,
@@ -307,7 +307,7 @@ public class QiyiRssShuffleManager implements ShuffleManager {
       ShuffleReadMetricsReporter metrics) {
     ShuffleReader<K, C> reader = null;
     try {
-      reader = (ShuffleReader<K, C>)delegate.getClass().getDeclaredMethod(
+      reader = (ShuffleReader<K, C>)delegate.getClass().getMethod(
           "getReaderForRange",
           ShuffleHandle.class,
           int.class,
