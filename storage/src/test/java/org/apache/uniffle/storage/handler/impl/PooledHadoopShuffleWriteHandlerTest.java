@@ -33,6 +33,7 @@ import org.apache.uniffle.common.ShufflePartitionedBlock;
 import org.apache.uniffle.storage.handler.api.ShuffleWriteHandler;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class PooledHadoopShuffleWriteHandlerTest {
 
@@ -40,11 +41,18 @@ public class PooledHadoopShuffleWriteHandlerTest {
     private List<Integer> invokedList;
     private int index;
     private Runnable execution;
+    private boolean markInitializationFail = false;
 
     FakedShuffleWriteHandler(List<Integer> invokedList, int index, Runnable runnable) {
       this.invokedList = invokedList;
       this.index = index;
       this.execution = runnable;
+    }
+
+    FakedShuffleWriteHandler(boolean isMarkInitializationFail) {
+      if (isMarkInitializationFail) {
+        throw new RuntimeException("Fail to init");
+      }
     }
 
     FakedShuffleWriteHandler(
@@ -59,6 +67,37 @@ public class PooledHadoopShuffleWriteHandlerTest {
     public void write(List<ShufflePartitionedBlock> shuffleBlocks) throws Exception {
       execution.run();
       invokedList.add(index);
+    }
+  }
+
+  @Test
+  public void initializationFailureTest() throws Exception {
+    int maxConcurrency = 2;
+    LinkedBlockingDeque<ShuffleWriteHandler> deque = new LinkedBlockingDeque<>(maxConcurrency);
+
+    PooledHadoopShuffleWriteHandler handler =
+        new PooledHadoopShuffleWriteHandler(
+            deque, maxConcurrency, index -> new FakedShuffleWriteHandler(true));
+
+    // to check the initialization
+    for (int i = 0; i < maxConcurrency; i++) {
+      try {
+        handler.write(Collections.emptyList());
+        fail();
+      } catch (Exception e) {
+        // ignore
+      }
+    }
+
+    // after initialization, the next writing will still fail due to the previous initialization
+    // fail.
+    for (int i = 0; i < maxConcurrency; i++) {
+      try {
+        handler.write(Collections.emptyList());
+        fail();
+      } catch (Exception e) {
+        // ignore
+      }
     }
   }
 
