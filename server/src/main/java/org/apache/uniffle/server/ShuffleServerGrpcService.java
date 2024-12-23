@@ -670,6 +670,12 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
                     storageType,
                     offset,
                     length);
+        reply =
+                GetLocalShuffleDataResponse.newBuilder()
+                        .setStatus(status.toProto())
+                        .setRetMsg(msg)
+                        .setData(UnsafeByteOperations.unsafeWrap(sdr.getData()))
+                        .build();
         long readTime = System.currentTimeMillis() - start;
         ShuffleServerMetrics.counterTotalReadTime.inc(readTime);
         ShuffleServerMetrics.counterTotalReadDataSize.inc(sdr.getDataLength());
@@ -681,12 +687,6 @@ public class ShuffleServerGrpcService extends ShuffleServerImplBase {
             "Successfully getShuffleData cost {} ms for shuffle" + " data with {}",
             readTime,
             requestInfo);
-        reply =
-            GetLocalShuffleDataResponse.newBuilder()
-                .setStatus(status.toProto())
-                .setRetMsg(msg)
-                .setData(UnsafeByteOperations.unsafeWrap(sdr.getData()))
-                .build();
       } catch (Exception e) {
         status = StatusCode.INTERNAL_ERROR;
         msg = "Error happened when get shuffle data for " + requestInfo + ", " + e.getMessage();
