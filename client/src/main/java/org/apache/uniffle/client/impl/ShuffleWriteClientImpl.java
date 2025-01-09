@@ -702,17 +702,12 @@ public class ShuffleWriteClientImpl implements ShuffleWriteClient {
               bitmapNum);
       ShuffleServerInfo ssi = entry.getKey();
       try {
+        long start = System.currentTimeMillis();
         RssReportShuffleResultResponse response =
             getShuffleServerClient(ssi).reportShuffleResult(request);
         if (response.getStatusCode() == StatusCode.SUCCESS) {
-          LOG.info(
-              "Report shuffle result to "
-                  + ssi
-                  + " for appId["
-                  + appId
-                  + "], shuffleId["
-                  + shuffleId
-                  + "] successfully");
+          LOG.info("Reported shuffle result to {} for appId[{}], shuffleId[{}] successfully that cost {} ms",
+                  ssi, appId, shuffleId, System.currentTimeMillis() - start);
         } else {
           LOG.warn(
               "Report shuffle result to "

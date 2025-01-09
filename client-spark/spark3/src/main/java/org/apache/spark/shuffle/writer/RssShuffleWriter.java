@@ -805,11 +805,13 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
         long start = System.currentTimeMillis();
         shuffleWriteClient.reportShuffleResult(
             serverToPartitionToBlockIds, appId, shuffleId, taskAttemptId, bitmapSplitNum);
+        long reportDuration = System.currentTimeMillis() - start;
         LOG.info(
-            "Report shuffle result for task[{}] with bitmapNum[{}] cost {} ms",
+            "Reported shuffle result for task[{}] with bitmapNum[{}] cost {} ms",
             taskAttemptId,
             bitmapSplitNum,
-            (System.currentTimeMillis() - start));
+            reportDuration);
+        shuffleWriteMetrics.incWriteTime(TimeUnit.MILLISECONDS.toNanos(reportDuration));
         // todo: we can replace the dummy host and port with the real shuffle server which we prefer
         // to read
         final BlockManagerId blockManagerId =
