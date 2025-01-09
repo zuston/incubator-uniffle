@@ -174,16 +174,17 @@ public class ShuffleBufferManager {
       updateUsedMemory(size);
     }
     updateShuffleSize(appId, shuffleId, size);
-    synchronized (this) {
-      flushSingleBufferIfNecessary(
-          buffer,
-          appId,
-          shuffleId,
-          spd.getPartitionId(),
-          entry.getKey().lowerEndpoint(),
-          entry.getKey().upperEndpoint());
-      flushIfNecessary();
+
+    int partitionId = spd.getPartitionId();
+    if (isFlushSingleBuffer(buffer, appId, shuffleId, partitionId)) {
+      synchronized (this) {
+        if (isFlushSingleBuffer(buffer, appId, shuffleId, partitionId)) {
+          boolean isHugePartition = isHugePartition(appId, shuffleId, partitionId);
+          flushBuffer(buffer, appId, shuffleId, entry.getKey().lowerEndpoint(), entry.getKey().upperEndpoint(), isHugePartition);
+        }
+      }
     }
+
     return StatusCode.SUCCESS;
   }
 
@@ -243,14 +244,21 @@ public class ShuffleBufferManager {
       int partitionId,
       int startPartition,
       int endPartition) {
-    boolean isHugePartition = isHugePartition(appId, shuffleId, partitionId);
     // When we use multi storage and trigger single buffer flush, the buffer size should be bigger
     // than rss.server.flush.cold.storage.threshold.size, otherwise cold storage will be useless.
-    if ((isHugePartition || this.bufferFlushEnabled)
-        && buffer.getSize() > this.bufferFlushThreshold) {
+    if (isFlushSingleBuffer(buffer, appId, shuffleId, partitionId)) {
+      boolean isHugePartition = isHugePartition(appId, shuffleId, partitionId);
       flushBuffer(buffer, appId, shuffleId, startPartition, endPartition, isHugePartition);
-      return;
     }
+  }
+
+  boolean isFlushSingleBuffer(ShuffleBuffer buffer, String appId, int shuffleId, int partitionId) {
+    boolean isHugePartition = isHugePartition(appId, shuffleId, partitionId);
+    if ((isHugePartition || this.bufferFlushEnabled)
+            && buffer.getSize() > this.bufferFlushThreshold) {
+      return true;
+    }
+    return false;
   }
 
   public void flushIfNecessary() {
@@ -444,7 +452,7 @@ public class ShuffleBufferManager {
   }
 
   // flush the buffer with required map which is <appId -> shuffleId>
-  public synchronized void flush(Map<String, Set<Integer>> requiredFlush) {
+  public void flush(Map<String, Set<Integer>> requiredFlush) {
     for (Map.Entry<String, Map<Integer, RangeMap<Integer, ShuffleBuffer>>> appIdToBuffers :
         bufferPool.entrySet()) {
       String appId = appIdToBuffers.getKey();

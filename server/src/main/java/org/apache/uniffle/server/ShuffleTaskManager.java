@@ -888,8 +888,10 @@ public class ShuffleTaskManager {
   }
 
   private void triggerFlush() {
-    synchronized (this.shuffleBufferManager) {
+    try {
       this.shuffleBufferManager.flushIfNecessary();
+    } catch (Exception e) {
+      LOG.error("Errors on triggering flush if necessary.", e);
     }
   }
 
