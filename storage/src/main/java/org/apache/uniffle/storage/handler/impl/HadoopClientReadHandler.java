@@ -154,7 +154,7 @@ public class HadoopClientReadHandler extends AbstractClientReadHandler {
     if (indexFiles != null && indexFiles.length != 0) {
       for (FileStatus status : indexFiles) {
         LOG.info(
-            "Find index file for shuffleId["
+            "Found index file for shuffleId["
                 + shuffleId
                 + "], partitionId["
                 + partitionId

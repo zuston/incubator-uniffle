@@ -145,6 +145,11 @@ public class LocalOrderSegmentSplitter implements SegmentSplitter {
       }
     }
 
+    if (totalLen != dataFileLen) {
+      LOGGER.info("Data file length[{}] is not consistent with the index file indicated data len[{}]",
+              dataFileLen, totalLen);
+    }
+
     if (bufferOffset > 0) {
       ShuffleDataSegment sds = new ShuffleDataSegment(fileOffset, bufferOffset, bufferSegments);
       dataFileSegments.add(sds);
