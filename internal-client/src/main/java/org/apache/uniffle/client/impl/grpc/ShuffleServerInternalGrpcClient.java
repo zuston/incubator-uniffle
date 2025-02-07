@@ -49,7 +49,7 @@ public class ShuffleServerInternalGrpcClient extends GrpcClient
 
   public ShuffleServerInternalGrpcClient(
       String host, int port, int maxRetryAttempts, boolean usePlaintext) {
-    super(host, port, maxRetryAttempts, usePlaintext);
+    super(host, port, maxRetryAttempts, usePlaintext, -1);
     // todo Add ClientInterceptor for authentication
     blockingStub = ShuffleServerInternalGrpc.newBlockingStub(channel);
   }

@@ -33,11 +33,16 @@ public abstract class GrpcClient {
   protected int maxRetryAttempts;
   protected ManagedChannel channel;
 
-  protected GrpcClient(String host, int port, int maxRetryAttempts, boolean usePlaintext) {
+  protected GrpcClient(String host, int port, int maxRetryAttempts, boolean usePlaintext, int nettyEventLoopThreads) {
     this.host = host;
     this.port = port;
     this.maxRetryAttempts = maxRetryAttempts;
     this.usePlaintext = usePlaintext;
+
+    if (nettyEventLoopThreads > 0) {
+      System.setProperty(
+              "io.grpc.netty.shaded.io.netty.eventLoopThreads", String.valueOf(nettyEventLoopThreads));
+    }
 
     // build channel
     ManagedChannelBuilder<?> channelBuilder = ManagedChannelBuilder.forAddress(host, port);

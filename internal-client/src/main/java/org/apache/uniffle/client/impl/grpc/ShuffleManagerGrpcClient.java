@@ -62,7 +62,7 @@ public class ShuffleManagerGrpcClient extends GrpcClient implements ShuffleManag
 
   public ShuffleManagerGrpcClient(
       String host, int port, int maxRetryAttempts, boolean usePlaintext) {
-    super(host, port, maxRetryAttempts, usePlaintext);
+    super(host, port, maxRetryAttempts, usePlaintext, -1);
     blockingStub = ShuffleManagerGrpc.newBlockingStub(channel);
   }
 
