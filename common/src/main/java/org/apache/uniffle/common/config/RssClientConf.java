@@ -342,7 +342,7 @@ public class RssClientConf {
   public static final ConfigOption<Integer> RSS_CLIENT_GRPC_EVENT_LOOP_THREADS =
       ConfigOptions.key("rss.client.grpc.nettyEventLoopThreads")
           .intType()
-          .defaultValue(-1)
+          .defaultValue(20)
           .withDescription("the event loop threads of netty impl for grpc");
 
   public static final ConfigOption<Boolean> RSS_CLIENT_PREFETCH_ENABLED =
