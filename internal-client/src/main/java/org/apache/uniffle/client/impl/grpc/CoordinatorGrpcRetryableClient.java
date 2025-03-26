@@ -34,6 +34,7 @@ import org.apache.uniffle.client.request.RssApplicationInfoRequest;
 import org.apache.uniffle.client.request.RssFetchClientConfRequest;
 import org.apache.uniffle.client.request.RssFetchRemoteStorageRequest;
 import org.apache.uniffle.client.request.RssGetShuffleAssignmentsRequest;
+import org.apache.uniffle.client.request.RssReportTaskFailedRequest;
 import org.apache.uniffle.client.request.RssSendHeartBeatRequest;
 import org.apache.uniffle.client.response.RssAccessClusterResponse;
 import org.apache.uniffle.client.response.RssAppHeartBeatResponse;
@@ -41,6 +42,7 @@ import org.apache.uniffle.client.response.RssApplicationInfoResponse;
 import org.apache.uniffle.client.response.RssFetchClientConfResponse;
 import org.apache.uniffle.client.response.RssFetchRemoteStorageResponse;
 import org.apache.uniffle.client.response.RssGetShuffleAssignmentsResponse;
+import org.apache.uniffle.client.response.RssReportTaskFailedResponse;
 import org.apache.uniffle.client.response.RssSendHeartBeatResponse;
 import org.apache.uniffle.common.exception.RssException;
 import org.apache.uniffle.common.rpc.StatusCode;
@@ -290,5 +292,18 @@ public class CoordinatorGrpcRetryableClient implements CoordinatorClient {
       heartBeatExecutorService.shutdownNow();
     }
     coordinatorClients.forEach(CoordinatorClient::close);
+  }
+
+  @Override
+  public RssReportTaskFailedResponse reportTaskFailed(RssReportTaskFailedRequest request) {
+    RssReportTaskFailedResponse result = null;
+    for (CoordinatorClient client : coordinatorClients) {
+      RssReportTaskFailedResponse response = client.reportTaskFailed(request);
+      if (response.getStatusCode() == StatusCode.SUCCESS) {
+        return response;
+      }
+      result = response;
+    }
+    return result;
   }
 }

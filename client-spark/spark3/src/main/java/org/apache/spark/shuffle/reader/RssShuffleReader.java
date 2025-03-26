@@ -42,6 +42,7 @@ import org.apache.spark.executor.ShuffleReadMetrics;
 import org.apache.spark.serializer.Serializer;
 import org.apache.spark.shuffle.FunctionUtils;
 import org.apache.spark.shuffle.RssShuffleHandle;
+import org.apache.spark.shuffle.RssShuffleManager;
 import org.apache.spark.shuffle.ShuffleReader;
 import org.apache.spark.util.CompletionIterator;
 import org.apache.spark.util.CompletionIterator$;
@@ -58,6 +59,7 @@ import org.apache.uniffle.common.ShuffleDataDistributionType;
 import org.apache.uniffle.common.ShuffleServerInfo;
 import org.apache.uniffle.common.config.RssClientConf;
 import org.apache.uniffle.common.config.RssConf;
+import org.apache.uniffle.common.exception.RssException;
 
 import static org.apache.spark.shuffle.RssSparkConfig.RSS_RESUBMIT_STAGE_WITH_FETCH_FAILURE_ENABLED;
 
@@ -85,6 +87,7 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
   private RssConf rssConf;
   private ShuffleDataDistributionType dataDistributionType;
   private Supplier<ShuffleManagerClient> managerClientSupplier;
+  private final RssShuffleManager shuffleManager;
 
   public RssShuffleReader(
       int startPartition,
@@ -102,7 +105,8 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
       Supplier<ShuffleManagerClient> managerClientSupplier,
       RssConf rssConf,
       ShuffleDataDistributionType dataDistributionType,
-      Map<Integer, List<ShuffleServerInfo>> allPartitionToServers) {
+      Map<Integer, List<ShuffleServerInfo>> allPartitionToServers,
+      RssShuffleManager shuffleManager) {
     this.appId = rssShuffleHandle.getAppId();
     this.startPartition = startPartition;
     this.endPartition = endPartition;
@@ -124,6 +128,7 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
     this.rssConf = rssConf;
     this.dataDistributionType = dataDistributionType;
     this.managerClientSupplier = managerClientSupplier;
+    this.shuffleManager = shuffleManager;
   }
 
   @Override
@@ -310,17 +315,24 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
 
     @Override
     public boolean hasNext() {
-      if (dataIterator == null) {
-        return false;
-      }
-      while (!dataIterator.hasNext()) {
-        if (!iterator.hasNext()) {
+      try {
+        if (dataIterator == null) {
           return false;
         }
-        dataIterator = iterator.next();
-        iterator.remove();
+        while (!dataIterator.hasNext()) {
+          if (!iterator.hasNext()) {
+            return false;
+          }
+          dataIterator = iterator.next();
+          iterator.remove();
+        }
+        return dataIterator.hasNext();
+      } catch (RssException e) {
+        if (shuffleManager != null) {
+          shuffleManager.reportTaskFailure(e, shuffleId, taskId);
+        }
+        throw e;
       }
-      return dataIterator.hasNext();
     }
 
     @Override

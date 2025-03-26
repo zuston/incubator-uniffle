@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.uniffle.coordinator.access.checker;
 
 import java.io.IOException;
@@ -44,9 +61,7 @@ import static org.apache.uniffle.coordinator.CoordinatorConf.COORDINATOR_SAFE_MO
 public class QiyiAccessChecker extends AbstractAccessChecker {
   private static final Logger LOGGER = LoggerFactory.getLogger(QiyiAccessChecker.class);
 
-  /**
-   * If entering safe mode, it will reject all access request.
-   */
+  /** If entering safe mode, it will reject all access request. */
   private boolean safemode = false;
 
   private boolean inGreyScaleMode = false;
@@ -82,16 +97,20 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
       return;
     }
 
-    LOGGER.info("Currently uniffle enters greyscale-mode, only jobs in whitelist will be accepted.");
+    LOGGER.info(
+        "Currently uniffle enters greyscale-mode, only jobs in whitelist will be accepted.");
     String confPath = coordinatorConf.get(COORDINATOR_QIYI_ACCESS_WHITE_LIST_PATH);
     if (StringUtils.isEmpty(confPath)) {
-      throw new RssException("Once enable greyscale mode, the conf of " + COORDINATOR_QIYI_ACCESS_WHITE_LIST_PATH
-          + " should be set");
+      throw new RssException(
+          "Once enable greyscale mode, the conf of "
+              + COORDINATOR_QIYI_ACCESS_WHITE_LIST_PATH
+              + " should be set");
     }
     loadAndRefreshWhiteList(confPath, accessManager.getHadoopConf());
   }
 
-  private void loadAndRefreshBlackList(String blackListPath, Configuration hadoopConf) throws Exception {
+  private void loadAndRefreshBlackList(String blackListPath, Configuration hadoopConf)
+      throws Exception {
     Path blackListFilePath = new Path(blackListPath);
     FileSystem fileSystem = HadoopFilesystemProvider.getFilesystem(blackListFilePath, hadoopConf);
     FileStatus fileStatus = fileSystem.getFileStatus(blackListFilePath);
@@ -105,9 +124,9 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
     }
     LOGGER.info("Initialized black list info: {}", blackListInfo);
 
-    updateBlacklistScheduler = Executors.newSingleThreadScheduledExecutor(
-        ThreadUtils.getThreadFactory("Update-black-list-%d")
-    );
+    updateBlacklistScheduler =
+        Executors.newSingleThreadScheduledExecutor(
+            ThreadUtils.getThreadFactory("Update-black-list-%d"));
     updateBlacklistScheduler.scheduleAtFixedRate(
         () -> {
           try {
@@ -126,8 +145,7 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
         },
         60,
         60,
-        TimeUnit.SECONDS
-    );
+        TimeUnit.SECONDS);
   }
 
   private void loadAndRefreshWhiteList(String confPath, Configuration hadoopConf) throws Exception {
@@ -144,9 +162,9 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
     }
     LOGGER.info("Initialized white list info: {}", whiteListInfo);
 
-    updateWhitelistScheduler = Executors.newSingleThreadScheduledExecutor(
-        ThreadUtils.getThreadFactory("Update-white-list-%d")
-    );
+    updateWhitelistScheduler =
+        Executors.newSingleThreadScheduledExecutor(
+            ThreadUtils.getThreadFactory("Update-white-list-%d"));
     updateWhitelistScheduler.scheduleAtFixedRate(
         () -> {
           try {
@@ -165,15 +183,10 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
         },
         60,
         60,
-        TimeUnit.SECONDS
-    );
+        TimeUnit.SECONDS);
   }
 
-  /**
-   *
-   * File content as list:
-   * hadoop-user=xx,wf-name=xxxxx,co-name=xxx,app-name=xxx,co-id=xxx
-   */
+  /** File content as list: hadoop-user=xx,wf-name=xxxxx,co-name=xxx,app-name=xxx,co-id=xxx */
   @VisibleForTesting
   protected List<Factor> loadFactorsFromFile(FileSystem fileSystem, Path confPath) {
     List<Factor> factors = new ArrayList<>();
@@ -217,14 +230,13 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
 
   public AccessCheckResult checkInternal(AccessInfo accessInfo) {
     /**
-     * Access limitation
-     * 1. Once in safe mode, it will reject all access requests.
-     * 2. When in grey scale mode, it must be in white list
-     * 3. Retried job will fallback.
+     * Access limitation 1. Once in safe mode, it will reject all access requests. 2. When in grey
+     * scale mode, it must be in white list 3. Retried job will fallback.
      */
     if (safemode) {
       LOGGER.warn("Rejected due to in safe mode, app info: {}", accessInfo.getExtraProperties());
-      return new AccessCheckResult(false, "Uniffle is in safe mode and all access requests have been rejected.");
+      return new AccessCheckResult(
+          false, "Uniffle is in safe mode and all access requests have been rejected.");
     }
 
     Map<String, String> jobInfos = accessInfo.getExtraProperties();
@@ -267,26 +279,29 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
     if (StringUtils.isNotEmpty(oozieJobInfos)) {
       platform = "gear";
 
-      String wfNameVal = Arrays.stream(oozieJobInfos.split(","))
-          .filter(x -> x.startsWith("wf.name"))
-          .findFirst()
-          .orElse(StringUtils.EMPTY);
+      String wfNameVal =
+          Arrays.stream(oozieJobInfos.split(","))
+              .filter(x -> x.startsWith("wf.name"))
+              .findFirst()
+              .orElse(StringUtils.EMPTY);
       if (StringUtils.isNotEmpty(wfNameVal)) {
         wfName = wfNameVal.split("=")[1];
       }
 
-      String coNameVal = Arrays.stream(oozieJobInfos.split(","))
-          .filter(x -> x.startsWith("coord.name"))
-          .findFirst()
-          .orElse(StringUtils.EMPTY);
+      String coNameVal =
+          Arrays.stream(oozieJobInfos.split(","))
+              .filter(x -> x.startsWith("coord.name"))
+              .findFirst()
+              .orElse(StringUtils.EMPTY);
       if (StringUtils.isNotEmpty(coNameVal)) {
         coName = coNameVal.split("=")[1];
       }
 
-      String coIdVal = Arrays.stream(oozieJobInfos.split(","))
-          .filter(x -> x.startsWith("coord.id"))
-          .findFirst()
-          .orElse(StringUtils.EMPTY);
+      String coIdVal =
+          Arrays.stream(oozieJobInfos.split(","))
+              .filter(x -> x.startsWith("coord.id"))
+              .findFirst()
+              .orElse(StringUtils.EMPTY);
       if (StringUtils.isNotEmpty(coIdVal)) {
         coId = coIdVal.split("=")[1].split("@")[0];
       }
@@ -300,13 +315,8 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
     } else if (StringUtils.isNotEmpty(pilotJobInfos)) {
       platform = "pilot";
       /**
-       * {
-       *     "spark.pilot.gear.info":{
-       *         "gearCoordinatorId":"8934195-220906104926298-oozie-oozi-C",
-       *         "gearWorkflowName":"wf_1"
-       *     },
-       *     "spark.pilot.planId":"xxxx"
-       * }
+       * { "spark.pilot.gear.info":{ "gearCoordinatorId":"8934195-220906104926298-oozie-oozi-C",
+       * "gearWorkflowName":"wf_1" }, "spark.pilot.planId":"xxxx" }
        */
       Map<String, Object> pilotMetaInfos = new Gson().fromJson(pilotJobInfos, Map.class);
       if (pilotMetaInfos.containsKey("spark.pilot.gear.info")) {
@@ -322,11 +332,8 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
       } else {
         // To be compatible with older version of Pilot.
         /**
-         * {
-         *     "spark.gear.cluster.name":"xxx",
-         *     "spark.gear.workflow.id":"xxxx",
-         *     "spark.gear.workflow.name":"xxxx"
-         * }
+         * { "spark.gear.cluster.name":"xxx", "spark.gear.workflow.id":"xxxx",
+         * "spark.gear.workflow.name":"xxxx" }
          */
         isRetry = false;
         wfName = (String) pilotMetaInfos.get("spark.gear.workflow.name");
@@ -364,8 +371,12 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
     }
 
     for (Factor factor : factors) {
-      if (factor.hadoopUser == null && factor.appName == null && factor.coName == null
-          && factor.wfName == null && factor.coId == null && factor.platform == null) {
+      if (factor.hadoopUser == null
+          && factor.appName == null
+          && factor.coName == null
+          && factor.wfName == null
+          && factor.coId == null
+          && factor.platform == null) {
         continue;
       }
       boolean userHit = factor.hadoopUser != null ? factor.hadoopUser.equals(jobInfo.user) : true;
@@ -377,11 +388,13 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
         continue;
       }
       // Support pattern match
-      boolean wfNameHit = factor.wfName != null ? equalOrWildcardMatch(factor.wfName, jobInfo.wfName) : true;
+      boolean wfNameHit =
+          factor.wfName != null ? equalOrWildcardMatch(factor.wfName, jobInfo.wfName) : true;
       if (!wfNameHit) {
         continue;
       }
-      boolean coNameHit = factor.coName != null ? equalOrWildcardMatch(factor.coName, jobInfo.coName) : true;
+      boolean coNameHit =
+          factor.coName != null ? equalOrWildcardMatch(factor.coName, jobInfo.coName) : true;
       if (!coNameHit) {
         continue;
       }
@@ -389,7 +402,8 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
       if (!coIdHit) {
         continue;
       }
-      boolean platformHit = factor.platform != null ? factor.platform.equals(jobInfo.platform) : true;
+      boolean platformHit =
+          factor.platform != null ? factor.platform.equals(jobInfo.platform) : true;
       if (!platformHit) {
         continue;
       }
@@ -428,10 +442,16 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
     // origin platform.
     private String platform;
 
-    JobMeta() {
-    }
+    JobMeta() {}
 
-    JobMeta(String coName, String wfName, String coId, String appName, String user, boolean isRetry, String platform) {
+    JobMeta(
+        String coName,
+        String wfName,
+        String coId,
+        String appName,
+        String user,
+        boolean isRetry,
+        String platform) {
       this.coName = coName;
       this.wfName = wfName;
       this.coId = coId;
@@ -488,12 +508,24 @@ public class QiyiAccessChecker extends AbstractAccessChecker {
     @Override
     public String toString() {
       return "Factor{"
-          + "hadoopUser='" + hadoopUser + '\''
-          + ", wfName='" + wfName + '\''
-          + ", coName='" + coName + '\''
-          + ", coId='" + coId + '\''
-          + ", appName='" + appName + '\''
-          + ", platform='" + platform + '\''
+          + "hadoopUser='"
+          + hadoopUser
+          + '\''
+          + ", wfName='"
+          + wfName
+          + '\''
+          + ", coName='"
+          + coName
+          + '\''
+          + ", coId='"
+          + coId
+          + '\''
+          + ", appName='"
+          + appName
+          + '\''
+          + ", platform='"
+          + platform
+          + '\''
           + '}';
     }
   }

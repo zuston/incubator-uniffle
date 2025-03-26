@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.shuffle;
 
 import java.io.IOException;
@@ -38,8 +55,10 @@ public class QiyiRssShuffleManager implements ShuffleManager {
   private final SparkConf sparkConf;
 
   private final boolean isGlutenEnabled;
-  private static final String GLUTEN_RSS_SHUFFLE_MANAGER = "org.apache.spark.shuffle.gluten.uniffle.UniffleShuffleManager";
-  private static final String GLUTEN_COLUMNAR_SHUFFLE_MANAGER = "org.apache.spark.shuffle.sort.ColumnarShuffleManager";
+  private static final String GLUTEN_RSS_SHUFFLE_MANAGER =
+      "org.apache.spark.shuffle.gluten.uniffle.UniffleShuffleManager";
+  private static final String GLUTEN_COLUMNAR_SHUFFLE_MANAGER =
+      "org.apache.spark.shuffle.sort.ColumnarShuffleManager";
   private static final String INTERNAL_SHUFFLE_MANAGER_KEY = "spark.rss.internal.shuffle.manager";
 
   public QiyiRssShuffleManager(SparkConf sparkConf, boolean isDriver) throws Exception {
@@ -71,24 +90,31 @@ public class QiyiRssShuffleManager implements ShuffleManager {
     if (canAccess) {
       try {
         sparkConf.set(RssSparkConfig.RSS_ENABLED.key(), "true");
-        String shuffleManagerCls = isGlutenEnabled ? GLUTEN_RSS_SHUFFLE_MANAGER : RssShuffleManager.class.getCanonicalName();
+        String shuffleManagerCls =
+            isGlutenEnabled
+                ? GLUTEN_RSS_SHUFFLE_MANAGER
+                : RssShuffleManager.class.getCanonicalName();
         sparkConf.set(INTERNAL_SHUFFLE_MANAGER_KEY, shuffleManagerCls);
         LOG.info("Use shuffle manager: {}", shuffleManagerCls);
 
         if (shuffleManagerCls.equals(RssShuffleManager.class.getCanonicalName())) {
           shuffleManager = new RssShuffleManager(sparkConf, true);
         } else {
-          shuffleManager = RssSparkShuffleUtils.loadShuffleManager(shuffleManagerCls, sparkConf, true);
+          shuffleManager =
+              RssSparkShuffleUtils.loadShuffleManager(shuffleManagerCls, sparkConf, true);
         }
         return shuffleManager;
       } catch (Exception exception) {
-        LOG.warn("Fail to create RssShuffleManager, fallback to non-rss shuffle manager {}", exception.getMessage());
+        LOG.warn(
+            "Fail to create RssShuffleManager, fallback to non-rss shuffle manager {}",
+            exception.getMessage());
       }
     }
 
     try {
       sparkConf.set(RssSparkConfig.RSS_ENABLED.key(), "false");
-      String shuffleManagerCls = isGlutenEnabled ? GLUTEN_COLUMNAR_SHUFFLE_MANAGER : Constants.SORT_SHUFFLE_MANAGER_NAME;
+      String shuffleManagerCls =
+          isGlutenEnabled ? GLUTEN_COLUMNAR_SHUFFLE_MANAGER : Constants.SORT_SHUFFLE_MANAGER_NAME;
       shuffleManager = RssSparkShuffleUtils.loadShuffleManager(shuffleManagerCls, sparkConf, true);
       sparkConf.set(INTERNAL_SHUFFLE_MANAGER_KEY, shuffleManagerCls);
       LOG.info("Use shuffle manager: {}", shuffleManagerCls);
@@ -100,7 +126,8 @@ public class QiyiRssShuffleManager implements ShuffleManager {
   }
 
   private boolean internalAccessCluster() {
-    String accessId = sparkConf.get(RssSparkConfig.RSS_ACCESS_ID.key(), "uniffle-access-id-empty").trim();
+    String accessId =
+        sparkConf.get(RssSparkConfig.RSS_ACCESS_ID.key(), "uniffle-access-id-empty").trim();
     if (StringUtils.isEmpty(accessId)) {
       LOG.warn("Access id key is empty");
       return false;
@@ -119,21 +146,29 @@ public class QiyiRssShuffleManager implements ShuffleManager {
 
     try {
       RssAccessClusterResponse response =
-              coordinatorClient.accessCluster(new RssAccessClusterRequest(
-                      accessId, assignmentTags, accessTimeoutMs, extraProperties, user));
+          coordinatorClient.accessCluster(
+              new RssAccessClusterRequest(
+                  accessId, assignmentTags, accessTimeoutMs, extraProperties, user));
       if (response.getStatusCode() == StatusCode.SUCCESS) {
         LOG.warn("Success to access cluster {} using {}", coordinatorClient.getDesc(), accessId);
         return true;
       } else if (response.getStatusCode() == StatusCode.ACCESS_DENIED) {
-        LOG.warn("Request to access cluster {} is denied using {} for {}",
-                coordinatorClient.getDesc(), accessId, response.getMessage());
+        LOG.warn(
+            "Request to access cluster {} is denied using {} for {}",
+            coordinatorClient.getDesc(),
+            accessId,
+            response.getMessage());
         return false;
       } else {
-        LOG.warn("Fail to reach cluster {} for {}", coordinatorClient.getDesc(), response.getMessage());
+        LOG.warn(
+            "Fail to reach cluster {} for {}", coordinatorClient.getDesc(), response.getMessage());
       }
     } catch (Exception e) {
-      LOG.warn("Fail to access cluster {} using {} for {}",
-              coordinatorClient.getDesc(), accessId, e.getMessage());
+      LOG.warn(
+          "Fail to access cluster {} using {} for {}",
+          coordinatorClient.getDesc(),
+          accessId,
+          e.getMessage());
     }
 
     return false;
@@ -153,12 +188,12 @@ public class QiyiRssShuffleManager implements ShuffleManager {
 
     infos.put(
         ACCESS_INFO_REQUIRED_SHUFFLE_NODES_NUM,
-        String.valueOf(RssSparkShuffleUtils.getRequiredShuffleServerNumber(sparkConf))
-    );
+        String.valueOf(RssSparkShuffleUtils.getRequiredShuffleServerNumber(sparkConf)));
 
     String appName = sparkConf.get("spark.app.name", StringUtils.EMPTY);
     infos.put("app.name", appName);
-    // When initializing shuffle manager, the spark.app.id is not in sparkConf, It will throw noSuchElementException.
+    // When initializing shuffle manager, the spark.app.id is not in sparkConf, It will throw
+    // noSuchElementException.
     // This should be improved in Spark.
     // infos.put("app.id", sparkConf.getAppId());
 
@@ -192,7 +227,8 @@ public class QiyiRssShuffleManager implements ShuffleManager {
       throw new RuntimeException("No such internal shuffle manager propagated from driver");
     }
     LOG.info("Use shuffle manager: {}", shuffleManagerCls);
-    ShuffleManager shuffleManager = RssSparkShuffleUtils.loadShuffleManager(shuffleManagerCls, sparkConf, false);
+    ShuffleManager shuffleManager =
+        RssSparkShuffleUtils.loadShuffleManager(shuffleManagerCls, sparkConf, false);
     return shuffleManager;
   }
 
@@ -200,18 +236,15 @@ public class QiyiRssShuffleManager implements ShuffleManager {
     return delegate;
   }
 
-
   @Override
-  public <K, V, C> ShuffleHandle registerShuffle(int shuffleId, ShuffleDependency<K, V, C> dependency) {
+  public <K, V, C> ShuffleHandle registerShuffle(
+      int shuffleId, ShuffleDependency<K, V, C> dependency) {
     return delegate.registerShuffle(shuffleId, dependency);
   }
 
   @Override
   public <K, V> ShuffleWriter<K, V> getWriter(
-      ShuffleHandle handle,
-      long mapId,
-      TaskContext context,
-      ShuffleWriteMetricsReporter metrics) {
+      ShuffleHandle handle, long mapId, TaskContext context, ShuffleWriteMetricsReporter metrics) {
     ShuffleWriter shuffleWriter = delegate.getWriter(handle, mapId, context, metrics);
     LOG.info("Writer: {}", shuffleWriter.getClass().getSimpleName());
     return shuffleWriter;
@@ -224,8 +257,7 @@ public class QiyiRssShuffleManager implements ShuffleManager {
       int endPartition,
       TaskContext context,
       ShuffleReadMetricsReporter metrics) {
-    return delegate.getReader(handle,
-        startPartition, endPartition, context, metrics);
+    return delegate.getReader(handle, startPartition, endPartition, context, metrics);
   }
 
   // The interface is only used for compatibility with spark 3.1.2
@@ -242,23 +274,28 @@ public class QiyiRssShuffleManager implements ShuffleManager {
     }
     ShuffleReader<K, C> reader = null;
     try {
-      reader = (ShuffleReader<K, C>)delegate.getClass().getMethod(
-          "getReader",
-          ShuffleHandle.class,
-          int.class,
-          int.class,
-          int.class,
-          int.class,
-          TaskContext.class,
-          ShuffleReadMetricsReporter.class).invoke(
-                  delegate,
-          handle,
-          startMapIndex,
-          endMapIndex,
-          startPartition,
-          endPartition,
-          context,
-          metrics);
+      reader =
+          (ShuffleReader<K, C>)
+              delegate
+                  .getClass()
+                  .getMethod(
+                      "getReader",
+                      ShuffleHandle.class,
+                      int.class,
+                      int.class,
+                      int.class,
+                      int.class,
+                      TaskContext.class,
+                      ShuffleReadMetricsReporter.class)
+                  .invoke(
+                      delegate,
+                      handle,
+                      startMapIndex,
+                      endMapIndex,
+                      startPartition,
+                      endPartition,
+                      context,
+                      metrics);
     } catch (Exception e) {
       throw new RssException(e);
     }
@@ -276,23 +313,28 @@ public class QiyiRssShuffleManager implements ShuffleManager {
       ShuffleReadMetricsReporter metrics) {
     ShuffleReader<K, C> reader = null;
     try {
-      reader = (ShuffleReader<K, C>)delegate.getClass().getMethod(
-          "getReaderForRange",
-          ShuffleHandle.class,
-          int.class,
-          int.class,
-          int.class,
-          int.class,
-          TaskContext.class,
-          ShuffleReadMetricsReporter.class).invoke(
-                  delegate,
-          handle,
-          startMapIndex,
-          endMapIndex,
-          startPartition,
-          endPartition,
-          context,
-          metrics);
+      reader =
+          (ShuffleReader<K, C>)
+              delegate
+                  .getClass()
+                  .getMethod(
+                      "getReaderForRange",
+                      ShuffleHandle.class,
+                      int.class,
+                      int.class,
+                      int.class,
+                      int.class,
+                      TaskContext.class,
+                      ShuffleReadMetricsReporter.class)
+                  .invoke(
+                      delegate,
+                      handle,
+                      startMapIndex,
+                      endMapIndex,
+                      startPartition,
+                      endPartition,
+                      context,
+                      metrics);
     } catch (Exception e) {
       throw new RssException(e);
     }

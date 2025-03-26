@@ -114,7 +114,8 @@ public class RssShuffleReaderTest extends AbstractRssReaderTest {
                 ExpiringCloseableSupplier.of(() -> mockShuffleManagerClient),
                 rssConf,
                 ShuffleDataDistributionType.NORMAL,
-                partitionToServers));
+                partitionToServers,
+                null));
     validateResult(rssShuffleReaderSpy.read(), expectedData, 10);
 
     writeTestData(
@@ -138,7 +139,8 @@ public class RssShuffleReaderTest extends AbstractRssReaderTest {
                 ExpiringCloseableSupplier.of(() -> mockShuffleManagerClient),
                 rssConf,
                 ShuffleDataDistributionType.NORMAL,
-                partitionToServers));
+                partitionToServers,
+                null));
     validateResult(rssShuffleReaderSpy1.read(), expectedData, 18);
 
     RssShuffleReader<String, String> rssShuffleReaderSpy2 =
@@ -159,7 +161,8 @@ public class RssShuffleReaderTest extends AbstractRssReaderTest {
                 ExpiringCloseableSupplier.of(() -> mockShuffleManagerClient),
                 rssConf,
                 ShuffleDataDistributionType.NORMAL,
-                partitionToServers));
+                partitionToServers,
+                null));
     validateResult(rssShuffleReaderSpy2.read(), Maps.newHashMap(), 0);
   }
 }

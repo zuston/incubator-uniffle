@@ -20,6 +20,7 @@ package org.apache.spark.shuffle;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -33,6 +34,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.spark.MapOutputTracker;
 import org.apache.spark.ShuffleDependency;
 import org.apache.spark.SparkConf;
@@ -56,8 +58,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.uniffle.client.PartitionDataReplicaRequirementTracking;
+import org.apache.uniffle.client.api.CoordinatorClient;
 import org.apache.uniffle.client.api.ShuffleWriteClient;
 import org.apache.uniffle.client.impl.FailedBlockSendTracker;
+import org.apache.uniffle.client.request.RssReportTaskFailedRequest;
+import org.apache.uniffle.client.response.RssReportTaskFailedResponse;
 import org.apache.uniffle.client.util.ClientUtils;
 import org.apache.uniffle.common.RemoteStorageInfo;
 import org.apache.uniffle.common.ShuffleDataDistributionType;
@@ -66,6 +71,7 @@ import org.apache.uniffle.common.config.RssClientConf;
 import org.apache.uniffle.common.config.RssConf;
 import org.apache.uniffle.common.exception.RssException;
 import org.apache.uniffle.common.exception.RssFetchFailedException;
+import org.apache.uniffle.common.rpc.StatusCode;
 import org.apache.uniffle.common.util.RssUtils;
 import org.apache.uniffle.shuffle.RssShuffleClientFactory;
 import org.apache.uniffle.shuffle.manager.RssShuffleManagerBase;
@@ -415,7 +421,8 @@ public class RssShuffleManager extends RssShuffleManagerBase {
         managerClientSupplier,
         RssSparkConfig.toRssConf(sparkConf),
         dataDistributionType,
-        shuffleHandleInfo.getAllPartitionServersForReader());
+        shuffleHandleInfo.getAllPartitionServersForReader(),
+        this);
   }
 
   private Map<ShuffleServerInfo, Set<Integer>> getPartitionDataServers(
@@ -663,6 +670,52 @@ public class RssShuffleManager extends RssShuffleManagerBase {
     } catch (RssFetchFailedException e) {
       throw RssSparkShuffleUtils.reportRssFetchFailedException(
           managerClientSupplier, e, sparkConf, appId, shuffleId, stageAttemptId, failedPartitions);
+    }
+  }
+
+  public void reportTaskFailure(Exception e, int shuffleId, String taskId) {
+    if (Thread.currentThread().isInterrupted()) {
+      LOG.info("Ignore reporting failure to coordinator as task has accepted interrupt signal.");
+      return;
+    }
+
+    if (RssSparkConfig.toRssConf(SparkEnv.get().conf())
+        .getBoolean(RssSparkConfig.RSS_TASK_FAILED_CALLBACK_ENABLED)) {
+      CoordinatorClient coordinatorClient = null;
+
+      String user = "";
+      try {
+        user = UserGroupInformation.getCurrentUser().getShortUserName();
+      } catch (Exception exp) {
+        throw new RssException("Errors on getting current user.", exp);
+      }
+
+      try {
+        coordinatorClient =
+            RssSparkShuffleUtils.createCoordinatorClientsWithoutHeartbeat(SparkEnv.get().conf());
+        RssReportTaskFailedRequest request =
+            new RssReportTaskFailedRequest(
+                appId,
+                shuffleId,
+                taskId,
+                1L,
+                Optional.ofNullable(e.getMessage()).orElse("EMPTY MSG"),
+                user);
+        RssReportTaskFailedResponse response = coordinatorClient.reportTaskFailed(request);
+        if (response.getStatusCode() != StatusCode.SUCCESS) {
+          LOG.error("Errors on reporting failure to coordinator", e);
+        }
+      } catch (Exception exception) {
+        LOG.warn("Errors on callback to coordinator.", exception);
+      } finally {
+        if (coordinatorClient != null) {
+          try {
+            coordinatorClient.close();
+          } catch (Exception fe) {
+            // ignore
+          }
+        }
+      }
     }
   }
 }

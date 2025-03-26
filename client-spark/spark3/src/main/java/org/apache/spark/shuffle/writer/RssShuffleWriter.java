@@ -291,6 +291,7 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
     try {
       writeImpl(records);
     } catch (Exception e) {
+      shuffleManager.reportTaskFailure(e, shuffleId, taskId);
       taskFailureCallback.apply(taskId);
       if (enableWriteFailureRetry) {
         throwFetchFailedIfNecessary(e, Sets.newConcurrentHashSet());
