@@ -64,7 +64,8 @@ public class QiyiRssShuffleManager implements ShuffleManager {
   public QiyiRssShuffleManager(SparkConf sparkConf, boolean isDriver) throws Exception {
     this.sparkConf = sparkConf;
     accessTimeoutMs = sparkConf.get(RssSparkConfig.RSS_ACCESS_TIMEOUT_MS);
-    isGlutenEnabled = sparkConf.get("spark.plugins", "").contains("org.apache.gluten.GlutenPlugin");
+    isGlutenEnabled = sparkConf.get("spark.plugins", "").contains("GlutenPlugin");
+    LOG.info("isGlutenEnabled: {}", isGlutenEnabled);
 
     if (isDriver) {
       LOG.info("Creating driver side shuffle manager...");
