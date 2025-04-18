@@ -350,7 +350,9 @@ public class QiyiRssShuffleManager implements ShuffleManager {
   @Override
   public void stop() {
     delegate.stop();
-    coordinatorClient.close();
+    if (coordinatorClient != null) {
+      coordinatorClient.close();
+    }
   }
 
   @Override
