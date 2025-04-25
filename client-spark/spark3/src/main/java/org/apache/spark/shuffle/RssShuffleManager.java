@@ -17,6 +17,7 @@
 
 package org.apache.spark.shuffle;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,7 @@ import org.apache.spark.TaskContext;
 import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.executor.ShuffleReadMetrics;
 import org.apache.spark.executor.ShuffleWriteMetrics;
+import org.apache.spark.shuffle.events.ShuffleAssignmentInfoEvent;
 import org.apache.spark.shuffle.handle.MutableShuffleHandleInfo;
 import org.apache.spark.shuffle.handle.ShuffleHandleInfo;
 import org.apache.spark.shuffle.handle.SimpleShuffleHandleInfo;
@@ -209,6 +211,19 @@ public class RssShuffleManager extends RssShuffleManagerBase {
             + partitionToServers.size()
             + "], shuffleServerForResult: "
             + partitionToServers);
+
+    // Post assignment event
+    RssSparkShuffleUtils.getActiveSparkContext()
+        .listenerBus()
+        .post(
+            new ShuffleAssignmentInfoEvent(
+                shuffleId,
+                new ArrayList<>(
+                    partitionToServers.values().stream()
+                        .flatMap(x -> x.stream())
+                        .map(x -> x.getId())
+                        .collect(Collectors.toSet()))));
+
     return new RssShuffleHandle<>(
         shuffleId, id.get(), dependency.rdd().getNumPartitions(), dependency, hdlInfoBd);
   }

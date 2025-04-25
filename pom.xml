@@ -107,6 +107,7 @@
     <skipBuildImage>true</skipBuildImage>
     <snakeyaml.version>2.2</snakeyaml.version>
     <kryo.version>4.0.2</kryo.version>
+    <scala.version>2.12.18</scala.version>
   </properties>
 
   <repositories>
@@ -1476,6 +1477,7 @@
         <module>client-spark/spark3-shaded</module>
         <module>integration-test/spark-common</module>
         <module>integration-test/spark3</module>
+        <module>client-spark/extension</module>
       </modules>
       <dependencyManagement>
         <dependencies>
@@ -1517,6 +1519,11 @@
           <dependency>
             <groupId>org.apache.uniffle</groupId>
             <artifactId>rss-client-spark-common</artifactId>
+            <version>${project.version}</version>
+          </dependency>
+          <dependency>
+            <groupId>org.apache.uniffle</groupId>
+            <artifactId>rss-client-spark-ui</artifactId>
             <version>${project.version}</version>
           </dependency>
           <dependency>
@@ -1557,6 +1564,7 @@
         <module>client-spark/spark3-shaded</module>
         <module>integration-test/spark-common</module>
         <module>integration-test/spark3</module>
+        <module>client-spark/extension</module>
       </modules>
       <dependencyManagement>
         <dependencies>
@@ -1606,6 +1614,11 @@
           <dependency>
             <groupId>org.apache.uniffle</groupId>
             <artifactId>rss-client-spark-common</artifactId>
+            <version>${project.version}</version>
+          </dependency>
+          <dependency>
+            <groupId>org.apache.uniffle</groupId>
+            <artifactId>rss-client-spark-ui</artifactId>
             <version>${project.version}</version>
           </dependency>
           <dependency>
@@ -1647,6 +1660,7 @@
         <module>client-spark/spark3-shaded</module>
         <module>integration-test/spark-common</module>
         <module>integration-test/spark3</module>
+        <module>client-spark/extension</module>
       </modules>
       <dependencyManagement>
         <dependencies>
@@ -1696,6 +1710,11 @@
           <dependency>
             <groupId>org.apache.uniffle</groupId>
             <artifactId>rss-client-spark-common</artifactId>
+            <version>${project.version}</version>
+          </dependency>
+          <dependency>
+            <groupId>org.apache.uniffle</groupId>
+            <artifactId>rss-client-spark-ui</artifactId>
             <version>${project.version}</version>
           </dependency>
           <dependency>
@@ -1739,6 +1758,7 @@
         <module>client-spark/spark3-shaded</module>
         <module>integration-test/spark-common</module>
         <module>integration-test/spark3</module>
+        <module>client-spark/extension</module>
       </modules>
       <dependencyManagement>
         <dependencies>
@@ -1788,6 +1808,11 @@
           <dependency>
             <groupId>org.apache.uniffle</groupId>
             <artifactId>rss-client-spark-common</artifactId>
+            <version>${project.version}</version>
+          </dependency>
+          <dependency>
+            <groupId>org.apache.uniffle</groupId>
+            <artifactId>rss-client-spark-ui</artifactId>
             <version>${project.version}</version>
           </dependency>
           <dependency>
@@ -1844,6 +1869,7 @@
         <module>client-spark/spark3-shaded</module>
         <module>integration-test/spark-common</module>
         <module>integration-test/spark3</module>
+        <module>client-spark/extension</module>
       </modules>
       <dependencyManagement>
         <dependencies>
@@ -1908,7 +1934,11 @@
             <type>test-jar</type>
             <scope>test</scope>
           </dependency>
-
+          <dependency>
+            <groupId>org.apache.uniffle</groupId>
+            <artifactId>rss-client-spark-ui</artifactId>
+            <version>${project.version}</version>
+          </dependency>
           <dependency>
             <groupId>org.apache.uniffle</groupId>
             <artifactId>rss-integration-spark-common-test</artifactId>
@@ -1947,6 +1977,7 @@
         <module>client-spark/spark3-shaded</module>
         <module>integration-test/spark-common</module>
         <module>integration-test/spark3</module>
+        <module>client-spark/extension</module>
       </modules>
       <dependencyManagement>
         <dependencies>
@@ -1996,6 +2027,11 @@
           <dependency>
             <groupId>org.apache.uniffle</groupId>
             <artifactId>rss-client-spark-common</artifactId>
+            <version>${project.version}</version>
+          </dependency>
+          <dependency>
+            <groupId>org.apache.uniffle</groupId>
+            <artifactId>rss-client-spark-ui</artifactId>
             <version>${project.version}</version>
           </dependency>
           <dependency>
@@ -2037,6 +2073,7 @@
         <module>client-spark/spark3-shaded</module>
         <module>integration-test/spark-common</module>
         <module>integration-test/spark3</module>
+        <module>client-spark/extension</module>
       </modules>
       <dependencyManagement>
         <dependencies>
@@ -2068,6 +2105,11 @@
           <dependency>
             <groupId>org.apache.uniffle</groupId>
             <artifactId>rss-client-spark-common</artifactId>
+            <version>${project.version}</version>
+          </dependency>
+          <dependency>
+            <groupId>org.apache.uniffle</groupId>
+            <artifactId>rss-client-spark-ui</artifactId>
             <version>${project.version}</version>
           </dependency>
           <dependency>
@@ -2128,6 +2170,7 @@
       <id>scala2.13</id>
       <properties>
         <scala.binary.version>2.13</scala.binary.version>
+        <scala.version>2.13.16</scala.version>
       </properties>
     </profile>
 
