@@ -18,8 +18,10 @@
 package org.apache.spark.ui
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.shuffle.events.ShuffleMetric
+import org.apache.spark.util.Utils
+import org.apache.spark.{AggregatedShuffleMetric, AggregatedShuffleReadMetric, AggregatedShuffleWriteMetric}
 
+import java.util.concurrent.ConcurrentHashMap
 import javax.servlet.http.HttpServletRequest
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.xml.{Node, NodeSeq}
@@ -37,7 +39,7 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
     </td>
   </tr>
 
-  private def allServerRow(kv: (String, Long, Long, Long, Long, Long, Long)) = <tr>
+  private def allServerRow(kv: (String, String, String, Double, String, String, Double)) = <tr>
     <td>{kv._1}</td>
     <td>{kv._2}</td>
     <td>{kv._3}</td>
@@ -46,40 +48,11 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
     <td>{kv._6}</td>
   </tr>
 
-  private def shuffleStatisticsCalculate(shuffleMetrics: Seq[(String, ShuffleMetric)]): (Seq[Long], Seq[String]) = {
-    if (shuffleMetrics.isEmpty) {
-      return (Seq.empty[Long], Seq.empty[String])
-    }
-
-    val trackerData = shuffleMetrics
-    val groupedAndSortedMetrics = trackerData
-      .groupBy(_._1)
-      .map {
-        case (key, metrics) =>
-          val totalByteSize = metrics.map(_._2.getByteSize).sum
-          val totalDuration = metrics.map(_._2.getDurationMillis).sum
-          (key, totalByteSize, totalDuration, totalByteSize / totalDuration)
-      }
-      .toSeq
-      .sortBy(_._4)
-
-    val minMetric = groupedAndSortedMetrics.head
-    val maxMetric = groupedAndSortedMetrics.last
-    val p25Metric = groupedAndSortedMetrics((groupedAndSortedMetrics.size * 0.25).toInt)
-    val p50Metric = groupedAndSortedMetrics(groupedAndSortedMetrics.size / 2)
-    val p75Metric = groupedAndSortedMetrics((groupedAndSortedMetrics.size * 0.75).toInt)
-
-    val speeds = Seq(minMetric, p25Metric, p50Metric, p75Metric, maxMetric).map(_._4)
-    val shuffleServerIds = Seq(minMetric, p25Metric, p50Metric, p75Metric, maxMetric).map(_._1)
-
-    (speeds, shuffleServerIds)
-  }
-
-  private def createShuffleMetricsRows(shuffleWriteMetrics: (Seq[Long], Seq[String]), shuffleReadMetrics: (Seq[Long], Seq[String])): Seq[scala.xml.Elem] = {
+  private def createShuffleMetricsRows(shuffleWriteMetrics: (Seq[Double], Seq[String]), shuffleReadMetrics: (Seq[Double], Seq[String])): Seq[scala.xml.Elem] = {
     val (writeSpeeds, writeServerIds) = if (shuffleWriteMetrics != null) shuffleWriteMetrics else (Seq.empty, Seq.empty)
     val (readSpeeds, readServerIds) = if (shuffleReadMetrics != null) shuffleReadMetrics else (Seq.empty, Seq.empty)
 
-    def createSpeedRow(metricType: String, speeds: Seq[Long]) = <tr>
+    def createSpeedRow(metricType: String, speeds: Seq[Double]) = <tr>
       <td>
         {metricType}
       </td>{speeds.map(speed => <td>
@@ -95,7 +68,7 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
       </td>)}
     </tr>
 
-    val writeSpeedRow = if (writeSpeeds.nonEmpty) Some(createSpeedRow("Write Speed (bytes/sec)", writeSpeeds)) else None
+    val writeSpeedRow = if (writeSpeeds.nonEmpty) Some(createSpeedRow("Write Speed (MB/sec)", writeSpeeds)) else None
     val writeServerIdRow = if (writeServerIds.nonEmpty) Some(createServerIdRow("Shuffle Write Server ID", writeServerIds)) else None
     val readSpeedRow = if (readSpeeds.nonEmpty) Some(createSpeedRow("Read Speed (bytes/sec)", readSpeeds)) else None
     val readServerIdRow = if (readServerIds.nonEmpty) Some(createServerIdRow("Shuffle Read Server ID", readServerIds)) else None
@@ -103,35 +76,18 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
     Seq(writeSpeedRow, writeServerIdRow, readSpeedRow, readServerIdRow).flatten
   }
 
-  private def combineReadWriteByServerId(writeMetrics: Seq[(String, ShuffleMetric)], readMetrics: Seq[(String, ShuffleMetric)]): Seq[(String, Long, Long, Long, Long, Long, Long)] = {
-    val write = groupByShuffleServer(writeMetrics)
-    val read = groupByShuffleServer(readMetrics)
-    val allServerIds = write.keySet ++ read.keySet
-    val combinedMetrics = allServerIds.toSeq.map { serverId =>
-      val writeMetric = write.getOrElse(serverId, (0L, 0L, 0L))
-      val readMetric = read.getOrElse(serverId, (0L, 0L, 0L))
-      (serverId, writeMetric._1, writeMetric._2, writeMetric._3, readMetric._1, readMetric._2, readMetric._3)
-    }
-    combinedMetrics
-  }
-
-  private def groupByShuffleServer(shuffleMetrics: Seq[(String, ShuffleMetric)]): Map[String, (Long, Long, Long)] = {
-    if (shuffleMetrics.isEmpty) {
-      return Map.empty[String, (Long, Long, Long)]
-    }
-    val metrics = shuffleMetrics
-      .groupBy(_._1)
-      .mapValues {
-        metrics =>
-          val totalByteSize = metrics.map(_._2.getByteSize).sum
-          val totalDuration = metrics.map(_._2.getDurationMillis).sum
-          (totalByteSize, totalDuration, totalByteSize / totalDuration)
-      }
-      .toMap
-    metrics
-  }
-
   override def render(request: HttpServletRequest): Seq[Node] = {
+    val originWriteMetric = runtimeStatusStore.aggregatedShuffleWriteMetrics()
+    val originReadMetric = runtimeStatusStore.aggregatedShuffleReadMetrics()
+
+    // render header
+    val writeMetaInfo = getShuffleMetaInfo(originWriteMetric.metrics.asScala.toSeq)
+    val readMetaInfo = getShuffleMetaInfo(originReadMetric.metrics.asScala.toSeq)
+    val shuffleTotalSize = writeMetaInfo._1
+    val shuffleTotalTime = writeMetaInfo._2 + readMetaInfo._2
+    val taskCpuTime = if (runtimeStatusStore.totalTaskTime == null) 0 else runtimeStatusStore.totalTaskTime.durationMillis
+    val percent = if (taskCpuTime == 0) 0 else shuffleTotalTime.toDouble / taskCpuTime
+
     // render build info
     val buildInfo = runtimeStatusStore.buildInfo()
     val buildInfoTableUI = UIUtils.listingTable(
@@ -142,12 +98,12 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
     )
 
     // render shuffle-servers write+read statistics
-    val shuffleWriteMetrics = shuffleStatisticsCalculate(runtimeStatusStore.taskShuffleWriteMetrics().flatMap(x => x.metrics.asScala))
-    val shuffleReadMetrics = shuffleStatisticsCalculate(runtimeStatusStore.taskShuffleReadMetrics().flatMap(x => x.metrics.asScala))
-    val shuffleHeader = Seq("Min", "P25", "P50", "P75", "Max")
+    val shuffleWriteMetrics = shuffleSpeedStatistics(originWriteMetric.metrics.asScala.toSeq)
+    val shuffleReadMetrics = shuffleSpeedStatistics(originReadMetric.metrics.asScala.toSeq)
+    val shuffleHeader = Seq("Avg", "Min", "P25", "P50", "P75", "Max")
     val shuffleMetricsRows = createShuffleMetricsRows(shuffleWriteMetrics, shuffleReadMetrics)
     val shuffleMetricsTableUI =
-      <table class="table table-bordered table-condensed table-striped table-head-clickable">
+      <table class="table table-bordered table-sm table-striped sortable">
         <thead>
           <tr>
             {("Metric" +: shuffleHeader).map(header => <th>
@@ -161,12 +117,12 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
       </table>
 
     // render all assigned shuffle-servers
-    val allServers = combineReadWriteByServerId(
-      runtimeStatusStore.taskShuffleWriteMetrics().flatMap(x => x.metrics.asScala),
-      runtimeStatusStore.taskShuffleReadMetrics().flatMap(x => x.metrics.asScala)
+    val allServers = unionByServerId(
+      originWriteMetric.metrics,
+      originReadMetric.metrics
     )
     val allServersTableUI = UIUtils.listingTable(
-      Seq("Shuffle Server ID", "Write Bytes", "Write Duration", "Write Speed", "Read Bytes", "Read Duration", "Read Speed"),
+      Seq("Shuffle Server ID", "Write Bytes", "Write Duration", "Write Speed (MB/sec)", "Read Bytes", "Read Duration", "Read Speed"),
       allServerRow,
       allServers,
       fixedWidth = true
@@ -181,60 +137,153 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
       fixedWidth = true
     )
 
-    val summary: NodeSeq =
+    val summary: NodeSeq = {
       <div>
         <div>
-          <span class="collapse-sql-properties collapse-table"
-                onClick="collapseTable('build-info-table')">
+          <ul class="list-unstyled">
+            <li id="completed-summary" data-relingo-block="true">
+              <a>
+                <strong>Total shuffle bytes:</strong>
+              </a>
+              {shuffleTotalSize} / {Utils.bytesToString(shuffleTotalSize)}
+            </li><li data-relingo-block="true">
+            <a>
+              <strong>Shuffle Duration / Task Duration:</strong>
+            </a>
+            {UIUtils.formatDuration(shuffleTotalTime)} / {UIUtils.formatDuration(taskCpuTime)} = {roundToTwoDecimals(percent)}
+          </li>
+          </ul>
+        </div>
+
+        <div>
+          <span class="collapse-build-info-properties collapse-table"
+                onClick="collapseTable('collapse-build-info-properties', 'build-info-table')">
             <h4>
               <span class="collapse-table-arrow arrow-closed"></span>
               <a>Uniffle Build Information</a>
             </h4>
           </span>
-          <div class="build-info-table collapsible-table">
+          <div class="build-info-table collapsible-table collapsed">
             {buildInfoTableUI}
           </div>
         </div>
 
         <div>
-          <span class="collapse-sql-properties collapse-table"
-                onClick="collapseTable('statistics-table')">
+          <span class="collapse-throughput-properties collapse-table"
+                onClick="collapseTable('collapse-throughput-properties', 'statistics-table')">
             <h4>
               <span class="collapse-table-arrow arrow-closed"></span>
               <a>Shuffle Throughput Statistics</a>
             </h4>
-            <div class="statistics-table collapsible-table">
+            <div class="statistics-table collapsible-table collapsed">
               {shuffleMetricsTableUI}
             </div>
           </span>
         </div>
 
         <div>
-          <span class="collapse-table" onClick="collapseTable('all-servers-table')">
+          <span class="collapse-server-properties collapse-table"
+                onClick="collapseTable('collapse-server-properties', 'all-servers-table')">
             <h4>
-              <span class="collapse-table-arrow"></span>
-              <a>Shuffle Server</a>
+              <span class="collapse-table-arrow arrow-closed"></span>
+              <a>Shuffle Server ({allServers.length})</a>
             </h4>
-            <div class="all-servers-table collapsed">
+            <div class="all-servers-table collapsible-table collapsed">
               {allServersTableUI}
             </div>
           </span>
         </div>
 
         <div>
-          <span class="collapse-sql-properties collapse-table"
-                onClick="collapseTable('assignment-table')">
+          <span class="collapse-assignment-properties collapse-table"
+                onClick="collapseTable('collapse-assignment-properties', 'assignment-table')">
             <h4>
               <span class="collapse-table-arrow arrow-closed"></span>
-              <a>Assignment</a>
+              <a>Assignment ({assignmentInfos.length})</a>
             </h4>
           </span>
-          <div class="assignment-table collapsible-table">
+          <div class="assignment-table collapsible-table collapsed">
             {assignmentTableUI}
           </div>
         </div>
       </div>
+    }
 
     UIUtils.headerSparkPage(request, "Uniffle", summary, parent)
+  }
+
+  private def getShuffleMetaInfo(metrics: Seq[(String, AggregatedShuffleMetric)]) = {
+    (
+      metrics.map(x => x._2.byteSize).sum,
+      metrics.map(x => x._2.durationMillis).sum
+      )
+  }
+
+  private def roundToTwoDecimals(value: Double): Double = {
+    BigDecimal(value).setScale(2, BigDecimal.RoundingMode.HALF_UP).toDouble
+  }
+
+  private def unionByServerId(write: ConcurrentHashMap[String, AggregatedShuffleWriteMetric],
+                              read: ConcurrentHashMap[String, AggregatedShuffleReadMetric]): Seq[(String, String, String, Double, String, String, Double)] = {
+    val writeMetrics = write.asScala
+    val readMetrics = read.asScala
+    val allServerIds = writeMetrics.keySet ++ readMetrics.keySet
+
+    val writeMetricsToMap =
+      writeMetrics
+        .mapValues {
+          metrics =>
+            (metrics.byteSize, metrics.durationMillis, (metrics.byteSize.toDouble / metrics.durationMillis) / 1000.00)
+        }
+        .toMap
+    val readMetricsToMap =
+      readMetrics
+        .mapValues {
+          metrics =>
+            (metrics.byteSize, metrics.durationMillis, (metrics.byteSize.toDouble / metrics.durationMillis) / 1000.00)
+        }
+        .toMap
+
+    val unionMetrics = allServerIds.toSeq.map { serverId =>
+      val writeMetric = writeMetricsToMap.getOrElse(serverId, (0L, 0L, 0.00))
+      val readMetric = readMetricsToMap.getOrElse(serverId, (0L, 0L, 0.00))
+      (
+        serverId,
+        Utils.bytesToString(writeMetric._1),
+        UIUtils.formatDuration(writeMetric._2),
+        roundToTwoDecimals(writeMetric._3),
+        Utils.bytesToString(readMetric._1),
+        UIUtils.formatDuration(readMetric._2),
+        roundToTwoDecimals(readMetric._3)
+      )
+    }
+    unionMetrics
+  }
+
+  private def shuffleSpeedStatistics(metrics: Seq[(String, AggregatedShuffleMetric)]): (Seq[Double], Seq[String]) = {
+    if (metrics.isEmpty) {
+      return (Seq.empty, Seq.empty)
+    }
+    val sorted =
+      metrics
+        .map(x => {
+          (x._1, x._2.byteSize, x._2.durationMillis, x._2.byteSize.toDouble / x._2.durationMillis / 1000.00)
+        })
+        .sortBy(_._4)
+
+    val totalBytes = sorted.map(_._2).sum.toDouble // Sum of all byte sizes
+    val totalDuration = sorted.map(_._3).sum.toDouble // Sum of all durations in milliseconds
+    val avgMetric = if (totalDuration != 0) totalBytes / totalDuration / 1000.00 else 0.0
+
+    val minMetric = sorted.head
+    val maxMetric = sorted.last
+    val p25Metric = sorted((sorted.size * 0.25).toInt)
+    val p50Metric = sorted(sorted.size / 2)
+    val p75Metric = sorted((sorted.size * 0.75).toInt)
+
+    val speeds = avgMetric +: Seq(minMetric, p25Metric, p50Metric, p75Metric, maxMetric).map(_._4)
+    val shuffleServerIds = "N/A" +: Seq(minMetric, p25Metric, p50Metric, p75Metric, maxMetric).map(_._1)
+
+    (speeds, shuffleServerIds)
   }
 }

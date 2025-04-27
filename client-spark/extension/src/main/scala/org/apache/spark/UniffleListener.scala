@@ -18,12 +18,54 @@
 package org.apache.spark
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.scheduler.{SparkListener, SparkListenerEvent}
+import org.apache.spark.scheduler.{SparkListener, SparkListenerEvent, SparkListenerJobEnd, SparkListenerTaskEnd}
 import org.apache.spark.shuffle.events.{ShuffleAssignmentInfoEvent, TaskShuffleReadInfoEvent, TaskShuffleWriteInfoEvent}
 import org.apache.spark.status.ElementTrackingStore
 
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+import scala.collection.JavaConverters.mapAsScalaMapConverter
+
 class UniffleListener(conf: SparkConf, kvstore: ElementTrackingStore)
   extends SparkListener with Logging {
+
+  private val aggregatedShuffleWriteMetric = new ConcurrentHashMap[String, AggregatedShuffleWriteMetric]
+  private val aggregatedShuffleReadMetric = new ConcurrentHashMap[String, AggregatedShuffleReadMetric]
+  private val totalTaskCpuTime = new AtomicLong(0)
+
+  private val updateIntervalMillis = 5000
+  private var updateLastTimeMillis: Long = -1
+
+  // Using the async interval update to reduce state store pressure
+  private def mayUpdate(force: Boolean): Unit = {
+    val now = System.currentTimeMillis()
+    if (force || now - updateLastTimeMillis > updateIntervalMillis) {
+      updateLastTimeMillis = now
+      kvstore.write(
+        new AggregatedShuffleWriteMetricsUIData(this.aggregatedShuffleWriteMetric)
+      )
+      kvstore.write(
+        new AggregatedShuffleReadMetricsUIData(this.aggregatedShuffleReadMetric)
+      )
+      kvstore.write(
+        TotalTaskCpuTime(totalTaskCpuTime.get())
+      )
+    }
+  }
+
+  override def onTaskEnd(taskEnd: SparkListenerTaskEnd): Unit = {
+    this.mayUpdate(false)
+    if (taskEnd.taskMetrics.shuffleReadMetrics.recordsRead > 0
+      || taskEnd.taskMetrics.shuffleWriteMetrics.recordsWritten > 0) {
+      totalTaskCpuTime.addAndGet(
+        taskEnd.taskInfo.duration
+      )
+    }
+  }
+
+  override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = {
+    this.mayUpdate(true)
+  }
 
   private def onBuildInfo(event: BuildInfoEvent): Unit = {
     val uiData = new BuildInfoUIData(event.info.toSeq.sortBy(_._1))
@@ -40,25 +82,24 @@ class UniffleListener(conf: SparkConf, kvstore: ElementTrackingStore)
   }
 
   private def onTaskShuffleWriteInfo(event: TaskShuffleWriteInfoEvent): Unit = {
-    kvstore.write(
-      new TaskShuffleWriteMetricUIData(
-        event.getStageId,
-        event.getShuffleId,
-        event.getTaskId,
-        event.getMetrics
-      )
-    )
+    val metrics = event.getMetrics
+    for (metric <- metrics.asScala) {
+      val id = metric._1
+      val agg_metric = this.aggregatedShuffleWriteMetric.computeIfAbsent(id, _ => new AggregatedShuffleWriteMetric(0, 0))
+      agg_metric.byteSize += metric._2.getByteSize
+      agg_metric.durationMillis += metric._2.getDurationMillis
+
+    }
   }
 
   private def onTaskShuffleReadInfo(event: TaskShuffleReadInfoEvent): Unit = {
-    kvstore.write(
-      new TaskShuffleReadMetricUIData(
-        event.getStageId,
-        event.getShuffleId,
-        event.getTaskId,
-        event.getMetrics
-      )
-    )
+    val metrics = event.getMetrics
+    for (metric <- metrics.asScala) {
+      val id = metric._1
+      val agg_metric = this.aggregatedShuffleReadMetric.computeIfAbsent(id, _ => new AggregatedShuffleReadMetric(0, 0))
+      agg_metric.byteSize += metric._2.getByteSize
+      agg_metric.durationMillis += metric._2.getDurationMillis
+    }
   }
 
   override def onOtherEvent(event: SparkListenerEvent): Unit = event match {
