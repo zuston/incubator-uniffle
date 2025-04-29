@@ -25,11 +25,13 @@ import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.uniffle.client.api.ClientInfo;
 import org.apache.uniffle.client.api.ShuffleServerClient;
 import org.apache.uniffle.client.request.RssGetInMemoryShuffleDataRequest;
 import org.apache.uniffle.client.response.RssGetInMemoryShuffleDataResponse;
 import org.apache.uniffle.common.BufferSegment;
 import org.apache.uniffle.common.ShuffleDataResult;
+import org.apache.uniffle.common.StorageType;
 import org.apache.uniffle.common.exception.RssFetchFailedException;
 import org.apache.uniffle.common.util.Constants;
 
@@ -41,6 +43,7 @@ public class MemoryClientReadHandler extends PrefetchableClientReadHandler {
   private Roaring64NavigableMap expectTaskIds;
   private int retryMax;
   private long retryIntervalMax;
+  private ShuffleServerReadCostTracker readCostTracker;
 
   public MemoryClientReadHandler(
       String appId,
@@ -51,7 +54,8 @@ public class MemoryClientReadHandler extends PrefetchableClientReadHandler {
       Roaring64NavigableMap expectTaskIds,
       int retryMax,
       long retryIntervalMax,
-      Optional<PrefetchableClientReadHandler.PrefetchOption> prefetchOption) {
+      Optional<PrefetchableClientReadHandler.PrefetchOption> prefetchOption,
+      ShuffleServerReadCostTracker readCostTracker) {
     super(prefetchOption);
     this.appId = appId;
     this.shuffleId = shuffleId;
@@ -61,6 +65,7 @@ public class MemoryClientReadHandler extends PrefetchableClientReadHandler {
     this.expectTaskIds = expectTaskIds;
     this.retryMax = retryMax;
     this.retryIntervalMax = retryIntervalMax;
+    this.readCostTracker = readCostTracker;
   }
 
   @VisibleForTesting
@@ -80,7 +85,8 @@ public class MemoryClientReadHandler extends PrefetchableClientReadHandler {
         expectTaskIds,
         1,
         0,
-        Optional.empty());
+        Optional.empty(),
+        new ShuffleServerReadCostTracker());
   }
 
   @Override
@@ -99,9 +105,18 @@ public class MemoryClientReadHandler extends PrefetchableClientReadHandler {
             retryIntervalMax);
 
     try {
+      long start = System.currentTimeMillis();
       RssGetInMemoryShuffleDataResponse response =
           shuffleServerClient.getInMemoryShuffleData(request);
       result = new ShuffleDataResult(response.getData(), response.getBufferSegments());
+      ClientInfo clientInfo = shuffleServerClient.getClientInfo();
+      if (readCostTracker != null && clientInfo != null) {
+        readCostTracker.record(
+            clientInfo.getShuffleServerInfo().getId(),
+            StorageType.MEMORY,
+            result.getDataLength(),
+            System.currentTimeMillis() - start);
+      }
     } catch (RssFetchFailedException e) {
       throw e;
     } catch (Exception e) {

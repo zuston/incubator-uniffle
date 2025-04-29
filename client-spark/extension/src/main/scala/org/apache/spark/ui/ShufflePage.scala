@@ -19,7 +19,7 @@ package org.apache.spark.ui
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.Utils
-import org.apache.spark.{AggregatedShuffleMetric, AggregatedShuffleReadMetric, AggregatedShuffleWriteMetric}
+import org.apache.spark.{AggregatedShuffleMetric, AggregatedShuffleReadMetric, AggregatedShuffleWriteMetric, AggregatedTaskInfoUIData}
 
 import java.util.concurrent.ConcurrentHashMap
 import javax.servlet.http.HttpServletRequest
@@ -46,6 +46,7 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
     <td>{kv._4}</td>
     <td>{kv._5}</td>
     <td>{kv._6}</td>
+    <td>{kv._7}</td>
   </tr>
 
   private def createShuffleMetricsRows(shuffleWriteMetrics: (Seq[Double], Seq[String]), shuffleReadMetrics: (Seq[Double], Seq[String])): Seq[scala.xml.Elem] = {
@@ -69,9 +70,9 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
     </tr>
 
     val writeSpeedRow = if (writeSpeeds.nonEmpty) Some(createSpeedRow("Write Speed (MB/sec)", writeSpeeds)) else None
-    val writeServerIdRow = if (writeServerIds.nonEmpty) Some(createServerIdRow("Shuffle Write Server ID", writeServerIds)) else None
-    val readSpeedRow = if (readSpeeds.nonEmpty) Some(createSpeedRow("Read Speed (bytes/sec)", readSpeeds)) else None
-    val readServerIdRow = if (readServerIds.nonEmpty) Some(createServerIdRow("Shuffle Read Server ID", readServerIds)) else None
+    val writeServerIdRow = if (writeServerIds.nonEmpty) Some(createServerIdRow("Write Shuffle Server ID", writeServerIds)) else None
+    val readSpeedRow = if (readSpeeds.nonEmpty) Some(createSpeedRow("Read Speed (MB/sec)", readSpeeds)) else None
+    val readServerIdRow = if (readServerIds.nonEmpty) Some(createServerIdRow("Read Shuffle Server ID", readServerIds)) else None
 
     Seq(writeSpeedRow, writeServerIdRow, readSpeedRow, readServerIdRow).flatten
   }
@@ -81,12 +82,17 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
     val originReadMetric = runtimeStatusStore.aggregatedShuffleReadMetrics()
 
     // render header
-    val writeMetaInfo = getShuffleMetaInfo(originWriteMetric.metrics.asScala.toSeq)
-    val readMetaInfo = getShuffleMetaInfo(originReadMetric.metrics.asScala.toSeq)
-    val shuffleTotalSize = writeMetaInfo._1
-    val shuffleTotalTime = writeMetaInfo._2 + readMetaInfo._2
-    val taskCpuTime = if (runtimeStatusStore.totalTaskTime == null) 0 else runtimeStatusStore.totalTaskTime.durationMillis
-    val percent = if (taskCpuTime == 0) 0 else shuffleTotalTime.toDouble / taskCpuTime
+    val aggTaskInfo = runtimeStatusStore.aggregatedTaskInfo
+    val taskInfo =
+      if (aggTaskInfo == null)
+        AggregatedTaskInfoUIData(0, 0, 0, 0)
+      else
+        aggTaskInfo
+    val percent =
+      if (taskInfo.cpuTimeMillis == 0)
+        0
+      else
+        (taskInfo.shuffleWriteMillis + taskInfo.shuffleReadMillis).toDouble / taskInfo.cpuTimeMillis
 
     // render build info
     val buildInfo = runtimeStatusStore.buildInfo()
@@ -97,13 +103,22 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
       fixedWidth = true
     )
 
+    // render uniffle configs
+    val rssConf = runtimeStatusStore.uniffleProperties()
+    val rssConfTableUI = UIUtils.listingTable(
+      propertyHeader,
+      propertyRow,
+      rssConf.info,
+      fixedWidth = true
+    )
+
     // render shuffle-servers write+read statistics
     val shuffleWriteMetrics = shuffleSpeedStatistics(originWriteMetric.metrics.asScala.toSeq)
     val shuffleReadMetrics = shuffleSpeedStatistics(originReadMetric.metrics.asScala.toSeq)
     val shuffleHeader = Seq("Avg", "Min", "P25", "P50", "P75", "Max")
     val shuffleMetricsRows = createShuffleMetricsRows(shuffleWriteMetrics, shuffleReadMetrics)
     val shuffleMetricsTableUI =
-      <table class="table table-bordered table-sm table-striped sortable">
+      <table class="table table-bordered table-sm table-striped">
         <thead>
           <tr>
             {("Metric" +: shuffleHeader).map(header => <th>
@@ -122,7 +137,7 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
       originReadMetric.metrics
     )
     val allServersTableUI = UIUtils.listingTable(
-      Seq("Shuffle Server ID", "Write Bytes", "Write Duration", "Write Speed (MB/sec)", "Read Bytes", "Read Duration", "Read Speed"),
+      Seq("Shuffle Server ID", "Write Bytes", "Write Duration", "Write Speed (MB/sec)", "Read Bytes", "Read Duration", "Read Speed (MB/sec)"),
       allServerRow,
       allServers,
       fixedWidth = true
@@ -145,12 +160,14 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
               <a>
                 <strong>Total shuffle bytes:</strong>
               </a>
-              {shuffleTotalSize} / {Utils.bytesToString(shuffleTotalSize)}
+              {Utils.bytesToString(taskInfo.shuffleBytes)}
             </li><li data-relingo-block="true">
             <a>
-              <strong>Shuffle Duration / Task Duration:</strong>
+              <strong>Shuffle Duration (write+read) / Task Duration:</strong>
             </a>
-            {UIUtils.formatDuration(shuffleTotalTime)} / {UIUtils.formatDuration(taskCpuTime)} = {roundToTwoDecimals(percent)}
+            {UIUtils.formatDuration(taskInfo.shuffleWriteMillis + taskInfo.shuffleReadMillis)}
+            ({UIUtils.formatDuration(taskInfo.shuffleWriteMillis)}+{UIUtils.formatDuration(taskInfo.shuffleReadMillis)})
+            / {UIUtils.formatDuration(taskInfo.cpuTimeMillis)} = {roundToTwoDecimals(percent)}
           </li>
           </ul>
         </div>
@@ -169,16 +186,29 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
         </div>
 
         <div>
+          <span class="collapse-uniffle-config-properties collapse-table"
+                onClick="collapseTable('collapse-uniffle-config-properties', 'uniffle-config-table')">
+            <h4>
+              <span class="collapse-table-arrow arrow-closed"></span>
+              <a>Uniffle Properties</a>
+            </h4>
+          </span>
+          <div class="uniffle-config-table collapsible-table collapsed">
+            {rssConfTableUI}
+          </div>
+        </div>
+
+        <div>
           <span class="collapse-throughput-properties collapse-table"
                 onClick="collapseTable('collapse-throughput-properties', 'statistics-table')">
             <h4>
               <span class="collapse-table-arrow arrow-closed"></span>
               <a>Shuffle Throughput Statistics</a>
             </h4>
-            <div class="statistics-table collapsible-table collapsed">
-              {shuffleMetricsTableUI}
-            </div>
           </span>
+          <div class="statistics-table collapsible-table collapsed">
+            {shuffleMetricsTableUI}
+          </div>
         </div>
 
         <div>
@@ -188,10 +218,10 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
               <span class="collapse-table-arrow arrow-closed"></span>
               <a>Shuffle Server ({allServers.length})</a>
             </h4>
-            <div class="all-servers-table collapsible-table collapsed">
-              {allServersTableUI}
-            </div>
           </span>
+          <div class="all-servers-table collapsible-table collapsed">
+            {allServersTableUI}
+          </div>
         </div>
 
         <div>
@@ -210,13 +240,6 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
     }
 
     UIUtils.headerSparkPage(request, "Uniffle", summary, parent)
-  }
-
-  private def getShuffleMetaInfo(metrics: Seq[(String, AggregatedShuffleMetric)]) = {
-    (
-      metrics.map(x => x._2.byteSize).sum,
-      metrics.map(x => x._2.durationMillis).sum
-      )
   }
 
   private def roundToTwoDecimals(value: Double): Double = {

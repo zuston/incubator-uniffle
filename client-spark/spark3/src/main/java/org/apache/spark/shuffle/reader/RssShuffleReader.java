@@ -20,6 +20,7 @@ package org.apache.spark.shuffle.reader;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import scala.Function0;
 import scala.Function1;
@@ -54,12 +55,16 @@ import org.slf4j.LoggerFactory;
 import org.apache.uniffle.client.api.ShuffleManagerClient;
 import org.apache.uniffle.client.api.ShuffleReadClient;
 import org.apache.uniffle.client.factory.ShuffleClientFactory;
+import org.apache.uniffle.client.request.RssReportShuffleReadMetricRequest;
+import org.apache.uniffle.client.response.RssReportShuffleReadMetricResponse;
 import org.apache.uniffle.client.util.RssClientConfig;
 import org.apache.uniffle.common.ShuffleDataDistributionType;
 import org.apache.uniffle.common.ShuffleServerInfo;
 import org.apache.uniffle.common.config.RssClientConf;
 import org.apache.uniffle.common.config.RssConf;
 import org.apache.uniffle.common.exception.RssException;
+import org.apache.uniffle.common.rpc.StatusCode;
+import org.apache.uniffle.storage.handler.impl.ShuffleServerReadCostTracker;
 
 import static org.apache.spark.shuffle.RssSparkConfig.RSS_RESUBMIT_STAGE_WITH_FETCH_FAILURE_ENABLED;
 
@@ -88,6 +93,8 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
   private ShuffleDataDistributionType dataDistributionType;
   private Supplier<ShuffleManagerClient> managerClientSupplier;
   private final RssShuffleManager shuffleManager;
+  private ShuffleServerReadCostTracker shuffleServerReadCostTracker =
+      new ShuffleServerReadCostTracker();
 
   public RssShuffleReader(
       int startPartition,
@@ -271,6 +278,7 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
             ShuffleClientFactory.getInstance()
                 .createShuffleReadClient(
                     ShuffleClientFactory.newReadBuilder()
+                        .readCostTracker(shuffleServerReadCostTracker)
                         .appId(appId)
                         .shuffleId(shuffleId)
                         .partitionId(partition)
@@ -321,6 +329,7 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
         }
         while (!dataIterator.hasNext()) {
           if (!iterator.hasNext()) {
+            postShuffleReadMetricsToDriver();
             return false;
           }
           dataIterator = iterator.next();
@@ -339,6 +348,31 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
     public Product2<K, C> next() {
       Product2<K, C> result = dataIterator.next();
       return result;
+    }
+  }
+
+  private void postShuffleReadMetricsToDriver() {
+    if (managerClientSupplier != null) {
+      ShuffleManagerClient client = managerClientSupplier.get();
+      if (client != null) {
+        RssReportShuffleReadMetricResponse response =
+            client.reportShuffleReadMetric(
+                new RssReportShuffleReadMetricRequest(
+                    context.stageId(),
+                    shuffleId,
+                    context.taskAttemptId(),
+                    shuffleServerReadCostTracker.list().entrySet().stream()
+                        .collect(
+                            Collectors.toMap(
+                                Map.Entry::getKey,
+                                x ->
+                                    new RssReportShuffleReadMetricRequest.TaskShuffleReadMetric(
+                                        x.getValue().getDurationMillis(),
+                                        x.getValue().getReadBytes())))));
+        if (response != null && response.getStatusCode() != StatusCode.SUCCESS) {
+          LOG.error("Errors on reporting shuffle read metrics to driver");
+        }
+      }
     }
   }
 }
