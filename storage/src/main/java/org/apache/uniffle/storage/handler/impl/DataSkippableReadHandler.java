@@ -17,8 +17,10 @@
 
 package org.apache.uniffle.storage.handler.impl;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import com.google.common.collect.Lists;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
@@ -38,7 +40,7 @@ public abstract class DataSkippableReadHandler extends PrefetchableClientReadHan
   protected int segmentIndex = 0;
 
   protected Roaring64NavigableMap expectBlockIds;
-  protected Roaring64NavigableMap processBlockIds;
+  protected Set<Long> processBlockIds;
 
   protected ShuffleDataDistributionType distributionType;
   protected Roaring64NavigableMap expectTaskIds;
@@ -49,7 +51,7 @@ public abstract class DataSkippableReadHandler extends PrefetchableClientReadHan
       int partitionId,
       int readBufferSize,
       Roaring64NavigableMap expectBlockIds,
-      Roaring64NavigableMap processBlockIds,
+      Set<Long> processBlockIds,
       ShuffleDataDistributionType distributionType,
       Roaring64NavigableMap expectTaskIds,
       Optional<PrefetchOption> prefetchOption) {
@@ -90,13 +92,13 @@ public abstract class DataSkippableReadHandler extends PrefetchableClientReadHan
     ShuffleDataResult result = null;
     while (segmentIndex < shuffleDataSegments.size()) {
       ShuffleDataSegment segment = shuffleDataSegments.get(segmentIndex);
-      Roaring64NavigableMap blocksOfSegment = Roaring64NavigableMap.bitmapOf();
-      segment.getBufferSegments().forEach(block -> blocksOfSegment.addLong(block.getBlockId()));
+      Set<Long> blocksOfSegment = new HashSet<>();
+      segment.getBufferSegments().forEach(block -> blocksOfSegment.add(block.getBlockId()));
       // skip unexpected blockIds
-      blocksOfSegment.and(expectBlockIds);
+      blocksOfSegment.removeIf(blockId -> !expectBlockIds.contains(blockId));
       if (!blocksOfSegment.isEmpty()) {
         // skip processed blockIds
-        blocksOfSegment.andNot(processBlockIds);
+        blocksOfSegment.removeAll(processBlockIds);
         if (!blocksOfSegment.isEmpty()) {
           result = readShuffleData(segment);
           segmentIndex++;
