@@ -103,7 +103,6 @@ import org.apache.uniffle.proto.RssProtos.GetShuffleResultForMultiPartResponse;
 import org.apache.uniffle.proto.RssProtos.GetShuffleResultRequest;
 import org.apache.uniffle.proto.RssProtos.GetShuffleResultResponse;
 import org.apache.uniffle.proto.RssProtos.MergeContext;
-import org.apache.uniffle.proto.RssProtos.PartitionToBlockIds;
 import org.apache.uniffle.proto.RssProtos.RemoteStorage;
 import org.apache.uniffle.proto.RssProtos.RemoteStorageConfItem;
 import org.apache.uniffle.proto.RssProtos.ReportShuffleResultRequest;
@@ -112,10 +111,8 @@ import org.apache.uniffle.proto.RssProtos.RequireBufferRequest;
 import org.apache.uniffle.proto.RssProtos.RequireBufferResponse;
 import org.apache.uniffle.proto.RssProtos.SendShuffleDataRequest;
 import org.apache.uniffle.proto.RssProtos.SendShuffleDataResponse;
-import org.apache.uniffle.proto.RssProtos.ShuffleBlock;
 import org.apache.uniffle.proto.RssProtos.ShuffleCommitRequest;
 import org.apache.uniffle.proto.RssProtos.ShuffleCommitResponse;
-import org.apache.uniffle.proto.RssProtos.ShuffleData;
 import org.apache.uniffle.proto.RssProtos.ShuffleDataBlockSegment;
 import org.apache.uniffle.proto.RssProtos.ShufflePartitionRange;
 import org.apache.uniffle.proto.RssProtos.ShuffleRegisterRequest;
@@ -536,6 +533,15 @@ public class ShuffleServerGrpcClient extends GrpcClient implements ShuffleServer
     return response;
   }
 
+  public static ByteString toByteString(List<ByteBuffer> buffers) {
+    ByteString.Output output = ByteString.newOutput();
+    for (ByteBuffer buffer : buffers) {
+      ByteBuffer dup = buffer.slice();
+      output.write(dup.array(), dup.position(), dup.remaining());
+    }
+    return output.toByteString();
+  }
+
   @Override
   public RssSendShuffleDataResponse sendShuffleData(RssSendShuffleDataRequest request) {
     String appId = request.getAppId();
@@ -549,38 +555,54 @@ public class ShuffleServerGrpcClient extends GrpcClient implements ShuffleServer
     // prepare rpc request based on shuffleId -> partitionId -> blocks
     for (Map.Entry<Integer, Map<Integer, List<ShuffleBlockInfo>>> stb :
         shuffleIdToBlocks.entrySet()) {
-      List<ShuffleData> shuffleData = Lists.newArrayList();
       int size = 0;
       int blockNum = 0;
       int shuffleId = stb.getKey();
-      List<Integer> partitionIds = new ArrayList<>();
       List<Integer> partitionRequireSizes = new ArrayList<>();
 
+      List<Integer> partitionIds = new ArrayList<>();
+      List<Integer> partitionBlockCounts = new ArrayList<>();
+      List<Long> blockIds = new ArrayList<>();
+      List<Integer> lengths = new ArrayList<>();
+      List<Integer> uncompressedLengths = new ArrayList<>();
+      List<Long> crcs = new ArrayList<>();
+      List<Long> taskAttemptIds = new ArrayList<>();
+      List<ByteBuffer> buffers = new ArrayList<>();
+
       for (Map.Entry<Integer, List<ShuffleBlockInfo>> ptb : stb.getValue().entrySet()) {
-        List<ShuffleBlock> shuffleBlocks = Lists.newArrayList();
         int partitionRequireSize = 0;
-        for (ShuffleBlockInfo sbi : ptb.getValue()) {
-          shuffleBlocks.add(
-              ShuffleBlock.newBuilder()
-                  .setBlockId(sbi.getBlockId())
-                  .setCrc(sbi.getCrc())
-                  .setLength(sbi.getLength())
-                  .setTaskAttemptId(sbi.getTaskAttemptId())
-                  .setUncompressLength(sbi.getUncompressLength())
-                  .setData(UnsafeByteOperations.unsafeWrap(sbi.getData().nioBuffer()))
-                  .build());
-          partitionRequireSize += sbi.getSize();
-          blockNum++;
+        int partitionId = ptb.getKey();
+        int counts = ptb.getValue().size();
+
+        partitionIds.add(partitionId);
+        partitionBlockCounts.add(counts);
+        for (ShuffleBlockInfo shuffleBlockInfo : ptb.getValue()) {
+          blockIds.add(shuffleBlockInfo.getBlockId());
+          lengths.add(shuffleBlockInfo.getLength());
+          uncompressedLengths.add(shuffleBlockInfo.getUncompressLength());
+          crcs.add(shuffleBlockInfo.getCrc());
+          taskAttemptIds.add(shuffleBlockInfo.getTaskAttemptId());
+          buffers.add(shuffleBlockInfo.getData().nioBuffer());
+
+          partitionRequireSize += shuffleBlockInfo.getSize();
+          blockNum += 1;
         }
+        // for require buffer operation
         size += partitionRequireSize;
-        shuffleData.add(
-            ShuffleData.newBuilder()
-                .setPartitionId(ptb.getKey())
-                .addAllBlock(shuffleBlocks)
-                .build());
-        partitionIds.add(ptb.getKey());
         partitionRequireSizes.add(partitionRequireSize);
       }
+
+      RssProtos.CombinedShuffleData combinedShuffleData =
+          RssProtos.CombinedShuffleData.newBuilder()
+              .addAllPartitionIds(partitionIds)
+              .addAllPartitionBlockCounts(partitionBlockCounts)
+              .addAllBlockIds(blockIds)
+              .addAllLengths(lengths)
+              .addAllUncompressLengths(uncompressedLengths)
+              .addAllCrcs(crcs)
+              .addAllTaskAttemptIds(taskAttemptIds)
+              .setCombinedData(toByteString(buffers))
+              .build();
 
       final int allocateSize = size;
       final int finalBlockNum = blockNum;
@@ -612,9 +634,9 @@ public class ShuffleServerGrpcClient extends GrpcClient implements ShuffleServer
                       .setAppId(appId)
                       .setShuffleId(stb.getKey())
                       .setRequireBufferId(requireId)
-                      .addAllShuffleData(shuffleData)
                       .setTimestamp(start)
                       .setStageAttemptNumber(stageAttemptNumber)
+                      .setCombinedShuffleData(combinedShuffleData)
                       .build();
               SendShuffleDataResponse response = getBlockingStub().sendShuffleData(rpcRequest);
               if (LOG.isDebugEnabled()) {
@@ -764,15 +786,18 @@ public class ShuffleServerGrpcClient extends GrpcClient implements ShuffleServer
 
   @Override
   public RssReportShuffleResultResponse reportShuffleResult(RssReportShuffleResultRequest request) {
-    List<PartitionToBlockIds> partitionToBlockIds = Lists.newArrayList();
+    List<Integer> partitionIds = new ArrayList<>(request.getPartitionToBlockIds().size());
+    List<Integer> blockIdCounts = new ArrayList<>(request.getPartitionToBlockIds().size());
+    List<Long> blockIds = Lists.newArrayList();
+
     for (Map.Entry<Integer, List<Long>> entry : request.getPartitionToBlockIds().entrySet()) {
-      List<Long> blockIds = entry.getValue();
-      if (blockIds != null && !blockIds.isEmpty()) {
-        partitionToBlockIds.add(
-            PartitionToBlockIds.newBuilder()
-                .setPartitionId(entry.getKey())
-                .addAllBlockIds(entry.getValue())
-                .build());
+      int partitionId = entry.getKey();
+      List<Long> bids = entry.getValue();
+
+      if (bids != null && !bids.isEmpty()) {
+        blockIds.addAll(bids);
+        partitionIds.add(partitionId);
+        blockIdCounts.add(bids.size());
       }
     }
 
@@ -782,7 +807,9 @@ public class ShuffleServerGrpcClient extends GrpcClient implements ShuffleServer
             .setShuffleId(request.getShuffleId())
             .setTaskAttemptId(request.getTaskAttemptId())
             .setBitmapNum(request.getBitmapNum())
-            .addAllPartitionToBlockIds(partitionToBlockIds)
+            .addAllBlockIds(blockIds)
+            .addAllPartitionIds(partitionIds)
+            .addAllBlockIdCounts(blockIdCounts)
             .build();
     ReportShuffleResultResponse rpcResponse = doReportShuffleResult(recRequest);
 
