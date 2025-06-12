@@ -972,15 +972,16 @@ public class ShuffleServerGrpcClient extends GrpcClient implements ShuffleServer
     RssGetShuffleDataResponse response;
     switch (rpcResponse.getStatus()) {
       case SUCCESS:
+        byte[] data = rpcResponse.getData().toByteArray();
         LOG.info(
-            "GetShuffleData from {}:{} for {} cost {} ms",
+            "GetShuffleData from {}:{} for {} cost {} ms with {} bytes",
             host,
             port,
             requestInfo,
-            System.currentTimeMillis() - start);
+            System.currentTimeMillis() - start, data.length);
         response =
             new RssGetShuffleDataResponse(
-                StatusCode.SUCCESS, ByteBuffer.wrap(rpcResponse.getData().toByteArray()));
+                StatusCode.SUCCESS, ByteBuffer.wrap(data));
         break;
       default:
         String msg =
@@ -1031,17 +1032,18 @@ public class ShuffleServerGrpcClient extends GrpcClient implements ShuffleServer
     RssGetShuffleIndexResponse response;
     switch (rpcResponse.getStatus()) {
       case SUCCESS:
+        byte[] data = rpcResponse.getIndexData().toByteArray();
         LOG.info(
-            "GetShuffleIndex from {}:{} for {} cost {} ms",
+            "GetShuffleIndex from {}:{} for {} cost {} ms with {} bytes",
             host,
             port,
             requestInfo,
-            System.currentTimeMillis() - start);
+            System.currentTimeMillis() - start, data.length);
         response =
             new RssGetShuffleIndexResponse(
                 StatusCode.SUCCESS,
                 new NettyManagedBuffer(
-                    Unpooled.wrappedBuffer(rpcResponse.getIndexData().toByteArray())),
+                    Unpooled.wrappedBuffer(data)),
                 rpcResponse.getDataFileLen(),
                 rpcResponse.getStorageIdsList().stream().mapToInt(Integer::intValue).toArray());
 
