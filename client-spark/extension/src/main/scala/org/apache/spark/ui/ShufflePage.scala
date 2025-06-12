@@ -18,6 +18,7 @@
 package org.apache.spark.ui
 
 import org.apache.spark.internal.Logging
+import org.apache.spark.shuffle.events.ShuffleWriteTimes
 import org.apache.spark.util.Utils
 import org.apache.spark.{AggregatedShuffleMetric, AggregatedShuffleReadMetric, AggregatedShuffleWriteMetric, AggregatedTaskInfoUIData}
 
@@ -37,6 +38,16 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
     </td> <td>
       {kv._2}
     </td>
+  </tr>
+
+  private def shuffleWriteTimesRow(kv: Seq[String]) = <tr>
+    <td>{kv(0)}</td>
+    <td>{kv(1)}</td>
+    <td>{kv(2)}</td>
+    <td>{kv(3)}</td>
+    <td>{kv(4)}</td>
+    <td>{kv(5)}</td>
+    <td>{kv(6)}</td>
   </tr>
 
   private def allServerRow(kv: (String, String, String, Double, Long, Long, String, String, String, Double)) = <tr>
@@ -112,6 +123,35 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
       propertyHeader,
       propertyRow,
       rssConf.info,
+      fixedWidth = true
+    )
+
+    // render shuffle write times
+    val writeTimes = Option(runtimeStatusStore.shuffleWriteTimes()).map(_.times).getOrElse(new ShuffleWriteTimes())
+    val total = if (writeTimes.getTotal <= 0) -1 else writeTimes.getTotal
+    val writeTimesUI = UIUtils.listingTable(
+      Seq("Total Time", "Wait Finish Time", "Copy Time", "Serialize Time", "Compress Time", "Sort Time", "Require Memory Time"),
+      shuffleWriteTimesRow,
+      Seq(
+        Seq(
+          UIUtils.formatDuration(writeTimes.getTotal),
+          UIUtils.formatDuration(writeTimes.getWaitFinish),
+          UIUtils.formatDuration(writeTimes.getCopy),
+          UIUtils.formatDuration(writeTimes.getSerialize),
+          UIUtils.formatDuration(writeTimes.getCompress),
+          UIUtils.formatDuration(writeTimes.getSort),
+          UIUtils.formatDuration(writeTimes.getRequireMemory),
+        ),
+        Seq(
+          1.toDouble,
+          writeTimes.getWaitFinish.toDouble / total,
+          writeTimes.getCopy.toDouble / total,
+          writeTimes.getSerialize.toDouble / total,
+          writeTimes.getCompress.toDouble / total,
+          writeTimes.getSort.toDouble / total,
+          writeTimes.getRequireMemory.toDouble / total,
+        ).map(x => roundToTwoDecimals(x).toString)
+      ),
       fixedWidth = true
     )
 
@@ -295,6 +335,19 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
           </span>
           <div class="assignment-table collapsible-table collapsed">
             {assignmentTableUI}
+          </div>
+        </div>
+
+        <div>
+          <span class="collapse-write-times-properties collapse-table"
+                onClick="collapseTable('collapse-write-times-properties', 'write-times-table')">
+            <h4>
+              <span class="collapse-table-arrow arrow-closed"></span>
+              <a>Shuffle Write Times</a>
+            </h4>
+          </span>
+          <div class="write-times-table collapsible-table collapsed">
+            {writeTimesUI}
           </div>
         </div>
       </div>
