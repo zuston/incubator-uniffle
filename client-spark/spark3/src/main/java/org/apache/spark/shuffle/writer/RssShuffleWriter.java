@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -145,6 +146,9 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
 
   private long totalShuffleWriteMills = 0L;
   private long checkSendResultMills = 0L;
+
+  private boolean isShuffleWriteFailed = false;
+  private Optional<String> shuffleWriteFailureReason = Optional.empty();
 
   // Only for tests
   @VisibleForTesting
@@ -325,6 +329,10 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
       writeImpl(records);
     } catch (Exception e) {
       shuffleManager.reportTaskFailure(e, appId, shuffleId, taskId);
+      if (e instanceof RssException) {
+        isShuffleWriteFailed = true;
+        shuffleWriteFailureReason = Optional.ofNullable(e.getMessage());
+      }
       taskFailureCallback.apply(taskId);
       if (enableWriteFailureRetry) {
         throwFetchFailedIfNecessary(e, Sets.newConcurrentHashSet());
@@ -952,7 +960,9 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
                       shuffleId,
                       taskContext.taskAttemptId(),
                       bufferManager.getShuffleServerPushCostTracker().toMetric(),
-                      writeTimes));
+                      writeTimes,
+                      isShuffleWriteFailed,
+                      shuffleWriteFailureReason));
           if (response.getStatusCode() != StatusCode.SUCCESS) {
             LOG.error("Errors on reporting shuffle write metrics to driver");
           }

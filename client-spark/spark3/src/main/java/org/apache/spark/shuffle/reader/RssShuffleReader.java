@@ -20,6 +20,7 @@ package org.apache.spark.shuffle.reader;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -97,6 +98,9 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
   private final RssShuffleManager shuffleManager;
   private ShuffleServerReadCostTracker shuffleServerReadCostTracker =
       new ShuffleServerReadCostTracker();
+
+  private boolean isShuffleReadFailed = false;
+  private Optional<String> shuffleReadReason = Optional.empty();
 
   public RssShuffleReader(
       int startPartition,
@@ -343,10 +347,13 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
           iterator.remove();
         }
         return dataIterator.hasNext();
-      } catch (RssException e) {
-        if (shuffleManager != null) {
+      } catch (Exception e) {
+        if (shuffleManager != null && e instanceof RssException) {
           shuffleManager.reportTaskFailure(e, appId, shuffleId, taskId);
         }
+        isShuffleReadFailed = true;
+        shuffleReadReason = Optional.ofNullable(e.getMessage());
+        postShuffleReadMetricsToDriver();
         throw e;
       }
     }
@@ -381,7 +388,9 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
                                         x.getValue().getLocalfileReadDurationMillis(),
                                         x.getValue().getLocalfileReadBytes(),
                                         x.getValue().getHadoopReadLocalFileDurationMillis(),
-                                        x.getValue().getHadoopReadLocalFileBytes())))));
+                                        x.getValue().getHadoopReadLocalFileBytes()))),
+                    isShuffleReadFailed,
+                    shuffleReadReason));
         if (response != null && response.getStatusCode() != StatusCode.SUCCESS) {
           LOG.error("Errors on reporting shuffle read metrics to driver");
         }
