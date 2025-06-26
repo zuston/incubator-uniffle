@@ -338,7 +338,7 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
         return dataIterator.hasNext();
       } catch (RssException e) {
         if (shuffleManager != null) {
-          shuffleManager.reportTaskFailure(e, shuffleId, taskId);
+          shuffleManager.reportTaskFailure(e, appId, shuffleId, taskId);
         }
         throw e;
       }

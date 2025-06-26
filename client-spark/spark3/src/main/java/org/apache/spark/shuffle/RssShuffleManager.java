@@ -688,7 +688,7 @@ public class RssShuffleManager extends RssShuffleManagerBase {
     }
   }
 
-  public void reportTaskFailure(Exception e, int shuffleId, String taskId) {
+  public void reportTaskFailure(Exception e, String appId, int shuffleId, String taskId) {
     if (Thread.currentThread().isInterrupted()) {
       LOG.info("Ignore reporting failure to coordinator as task has accepted interrupt signal.");
       return;
