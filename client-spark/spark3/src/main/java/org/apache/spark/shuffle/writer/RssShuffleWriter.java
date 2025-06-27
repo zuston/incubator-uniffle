@@ -983,6 +983,7 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
       // free all memory & metadata, or memory leak happen in executor
       if (bufferManager != null) {
         bufferManager.freeAllMemory();
+        bufferManager.close();
       }
       if (shuffleManager != null) {
         shuffleManager.clearTaskMeta(taskId);
