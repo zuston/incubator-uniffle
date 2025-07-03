@@ -329,10 +329,10 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
     try {
       writeImpl(records);
     } catch (Exception e) {
-      shuffleManager.reportTaskFailure(e, appId, shuffleId, taskId);
       if (e instanceof RssException) {
         isShuffleWriteFailed = true;
         shuffleWriteFailureReason = Optional.ofNullable(e.getMessage());
+        shuffleManager.reportTaskFailure(e, appId, shuffleId, taskId);
       }
       taskFailureCallback.apply(taskId);
       if (enableWriteFailureRetry) {
