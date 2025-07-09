@@ -99,7 +99,7 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
     val aggTaskInfo = runtimeStatusStore.aggregatedTaskInfo
     val taskInfo =
       if (aggTaskInfo == null)
-        AggregatedTaskInfoUIData(0, 0, 0, 0)
+        AggregatedTaskInfoUIData(0, 0, 0, 0, 0)
       else
         aggTaskInfo
     val percent = {
@@ -109,6 +109,11 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
         (taskInfo.shuffleWriteMillis + taskInfo.shuffleReadMillis).toDouble / taskInfo.cpuTimeMillis
       }
     }
+    // compression ratio
+    val compressionRatio = if (taskInfo.shuffleBytes == 0) 0 else {
+      taskInfo.uncompressedShuffleBytes / taskInfo.shuffleBytes
+    }
+
     // speed unit is MB/sec
     val clientObservedWriteAvgSpeed = if (aggTaskInfo.shuffleWriteMillis == 0) 0 else {
       roundToTwoDecimals(aggTaskInfo.shuffleBytes.toDouble / aggTaskInfo.shuffleWriteMillis / 1000)
@@ -264,6 +269,12 @@ class ShufflePage(parent: ShuffleTab) extends WebUIPage("") with Logging {
                 <strong>Total shuffle bytes:</strong>
               </a>
               {Utils.bytesToString(taskInfo.shuffleBytes)}
+            </li>
+            <li>
+              <a>
+                <strong>CompressionRatio: </strong>
+              </a>
+              {Utils.bytesToString(taskInfo.uncompressedShuffleBytes)}/{Utils.bytesToString(taskInfo.shuffleBytes)}={roundToTwoDecimals(compressionRatio)}
             </li>
             <li>
               <a>
