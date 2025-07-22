@@ -199,9 +199,8 @@ message ShuffleRegisterRequest {
   string user = 5;
   DataDistribution shuffleDataDistribution = 6;
   int32 maxConcurrencyPerPartitionToWrite = 7;
-  int32 stageAttemptNumber = 8;
-  MergeContext mergeContext = 9;
-  map<string, string> properties = 10;
+  MergeContext mergeContext = 8;
+  map<string, string> properties = 9;
 }
 
 enum DataDistribution {
