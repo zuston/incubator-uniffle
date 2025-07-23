@@ -19,6 +19,7 @@ package org.apache.uniffle.common.compression;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
@@ -30,12 +31,12 @@ public class StatisticsCodec extends Codec {
 
   private final Codec codec;
   // todo: decompression could be involved in cost tracking.
-  private List<CodecCost> compressCosts;
+  private final List<CodecCost> compressCosts;
 
   StatisticsCodec(Codec codec) {
     LOGGER.info("Statistic codec is enabled");
     this.codec = codec;
-    this.compressCosts = new ArrayList<>();
+    this.compressCosts = Collections.synchronizedList(new ArrayList<>());
   }
 
   @Override
