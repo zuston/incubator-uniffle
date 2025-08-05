@@ -1232,16 +1232,10 @@ public class ShuffleWriteClientImpl implements ShuffleWriteClient {
   }
 
   void addShuffleServer(String appId, int shuffleId, ShuffleServerInfo serverInfo) {
-    Map<Integer, Set<ShuffleServerInfo>> appServerMap = shuffleServerInfoMap.get(appId);
-    if (appServerMap == null) {
-      appServerMap = JavaUtils.newConcurrentMap();
-      shuffleServerInfoMap.put(appId, appServerMap);
-    }
-    Set<ShuffleServerInfo> shuffleServerInfos = appServerMap.get(shuffleId);
-    if (shuffleServerInfos == null) {
-      shuffleServerInfos = Sets.newConcurrentHashSet();
-      appServerMap.put(shuffleId, shuffleServerInfos);
-    }
+    Map<Integer, Set<ShuffleServerInfo>> appServerMap =
+        shuffleServerInfoMap.computeIfAbsent(appId, x -> JavaUtils.newConcurrentMap());
+    Set<ShuffleServerInfo> shuffleServerInfos =
+        appServerMap.computeIfAbsent(shuffleId, x -> Sets.newConcurrentHashSet());
     shuffleServerInfos.add(serverInfo);
   }
 
