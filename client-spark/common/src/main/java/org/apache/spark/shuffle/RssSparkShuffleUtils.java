@@ -19,6 +19,7 @@ package org.apache.spark.shuffle;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -262,13 +263,19 @@ public class RssSparkShuffleUtils {
    * Get current active {@link SparkContext}. It should be called inside Driver since we don't mean
    * to create any new {@link SparkContext} here.
    *
-   * <p>Note: We could use "SparkContext.getActive()" instead of "SparkContext.getOrCreate()" if the
-   * "getActive" method is not declared as package private in Scala.
-   *
    * @return Active SparkContext created by Driver.
    */
   public static SparkContext getActiveSparkContext() {
-    return SparkContext.getOrCreate();
+    try {
+      Class<?> clazz = Class.forName("org.apache.spark.SparkContext$");
+      Object module = clazz.getField("MODULE$").get(null);
+      Method getActiveMethod = clazz.getMethod("getActive");
+      Object scOpt = getActiveMethod.invoke(module);
+      return ((Option<SparkContext>) scOpt).get();
+    } catch (Exception e) {
+      LOG.error("Failed to get active SparkContext", e);
+      throw new RssException(e);
+    }
   }
 
   /**
