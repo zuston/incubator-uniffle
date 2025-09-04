@@ -69,6 +69,7 @@ import org.apache.uniffle.common.RemoteStorageInfo;
 import org.apache.uniffle.common.ShuffleAssignmentsInfo;
 import org.apache.uniffle.common.ShuffleBlockInfo;
 import org.apache.uniffle.common.ShuffleDataDistributionType;
+import org.apache.uniffle.common.ShuffleReadTimes;
 import org.apache.uniffle.common.ShuffleServerInfo;
 import org.apache.uniffle.common.compression.Codec;
 import org.apache.uniffle.common.compression.Lz4Codec;
@@ -625,6 +626,11 @@ public class FetcherTest {
 
     @Override
     public void logStatics() {}
+
+    @Override
+    public ShuffleReadTimes getShuffleReadTimes() {
+      return new ShuffleReadTimes();
+    }
   }
 
   static class MockedReporter implements Reporter {

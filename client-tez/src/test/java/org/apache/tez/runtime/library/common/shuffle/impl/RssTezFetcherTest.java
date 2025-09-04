@@ -55,6 +55,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.uniffle.client.api.ShuffleReadClient;
 import org.apache.uniffle.client.response.CompressedShuffleBlock;
+import org.apache.uniffle.common.ShuffleReadTimes;
 import org.apache.uniffle.common.compression.Codec;
 import org.apache.uniffle.common.compression.Lz4Codec;
 import org.apache.uniffle.common.config.RssConf;
@@ -359,6 +360,11 @@ public class RssTezFetcherTest {
 
     @Override
     public void logStatics() {}
+
+    @Override
+    public ShuffleReadTimes getShuffleReadTimes() {
+      return new ShuffleReadTimes();
+    }
   }
 
   /**
