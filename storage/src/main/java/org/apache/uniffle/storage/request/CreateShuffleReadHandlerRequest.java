@@ -59,6 +59,11 @@ public class CreateShuffleReadHandlerRequest {
   private RssConf clientConf;
   private ShuffleServerReadCostTracker readCostTracker;
 
+  private boolean nextReadSegmentsReportEnabled;
+  private int nextReadSegmentsReportCount;
+
+  private long taskAttemptId;
+
   private IdHelper idHelper;
 
   private ClientType clientType;
@@ -67,6 +72,30 @@ public class CreateShuffleReadHandlerRequest {
 
   public RssBaseConf getRssBaseConf() {
     return rssBaseConf;
+  }
+
+  public int getNextReadSegmentsReportCount() {
+    return nextReadSegmentsReportCount;
+  }
+
+  public void setNextReadSegmentsReportCount(int nextReadSegmentsReportCount) {
+    this.nextReadSegmentsReportCount = nextReadSegmentsReportCount;
+  }
+
+  public long getTaskAttemptId() {
+    return taskAttemptId;
+  }
+
+  public void setTaskAttemptId(long taskAttemptId) {
+    this.taskAttemptId = taskAttemptId;
+  }
+
+  public boolean isNextReadSegmentsReportEnabled() {
+    return nextReadSegmentsReportEnabled;
+  }
+
+  public void setNextReadSegmentsReportEnabled(boolean nextReadSegmentsReportEnabled) {
+    this.nextReadSegmentsReportEnabled = nextReadSegmentsReportEnabled;
   }
 
   public void setRssBaseConf(RssBaseConf rssBaseConf) {

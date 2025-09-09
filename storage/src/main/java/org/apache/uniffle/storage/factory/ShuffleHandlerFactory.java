@@ -165,7 +165,10 @@ public class ShuffleHandlerFactory {
         request.getRetryMax(),
         request.getRetryIntervalMax(),
         request.getPrefetchOption(),
-        request.getReadCostTracker());
+        request.getReadCostTracker(),
+        request.isNextReadSegmentsReportEnabled(),
+        request.getNextReadSegmentsReportCount(),
+        request.getTaskAttemptId());
   }
 
   private ClientReadHandler getHadoopClientReadHandler(

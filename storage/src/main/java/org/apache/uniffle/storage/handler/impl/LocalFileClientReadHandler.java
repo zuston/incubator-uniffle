@@ -17,6 +17,7 @@
 
 package org.apache.uniffle.storage.handler.impl;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -46,6 +47,8 @@ public class LocalFileClientReadHandler extends DataSkippableReadHandler {
   private int retryMax;
   private long retryIntervalMax;
   private ShuffleServerReadCostTracker readCostTracker;
+  private boolean nextReadSegmentsReportEnabled;
+  private long taskAttemptId;
 
   public LocalFileClientReadHandler(
       String appId,
@@ -63,7 +66,10 @@ public class LocalFileClientReadHandler extends DataSkippableReadHandler {
       int retryMax,
       long retryIntervalMax,
       Optional<PrefetchOption> prefetchOption,
-      ShuffleServerReadCostTracker readCostTracker) {
+      ShuffleServerReadCostTracker readCostTracker,
+      boolean nextReadSegmentsReportEnabled,
+      int nextReadSegmentCount,
+      long taskAttemptId) {
     super(
         appId,
         shuffleId,
@@ -73,13 +79,16 @@ public class LocalFileClientReadHandler extends DataSkippableReadHandler {
         processBlockIds,
         distributionType,
         expectTaskIds,
-        prefetchOption);
+        prefetchOption,
+        nextReadSegmentCount);
     this.shuffleServerClient = shuffleServerClient;
     this.partitionNumPerRange = partitionNumPerRange;
     this.partitionNum = partitionNum;
     this.retryMax = retryMax;
     this.retryIntervalMax = retryIntervalMax;
     this.readCostTracker = readCostTracker;
+    this.nextReadSegmentsReportEnabled = nextReadSegmentsReportEnabled;
+    this.taskAttemptId = taskAttemptId;
   }
 
   @VisibleForTesting
@@ -110,7 +119,10 @@ public class LocalFileClientReadHandler extends DataSkippableReadHandler {
         1,
         0,
         Optional.empty(),
-        new ShuffleServerReadCostTracker());
+        new ShuffleServerReadCostTracker(),
+        false,
+        4,
+        0);
   }
 
   @Override
@@ -144,7 +156,8 @@ public class LocalFileClientReadHandler extends DataSkippableReadHandler {
   }
 
   @Override
-  public ShuffleDataResult readShuffleData(ShuffleDataSegment shuffleDataSegment) {
+  public ShuffleDataResult readShuffleData(
+      ShuffleDataSegment shuffleDataSegment, List<ShuffleDataSegment> nextReadSegments) {
     ShuffleDataResult result = null;
     int expectedLength = shuffleDataSegment.getLength();
     if (expectedLength <= 0) {
@@ -171,7 +184,10 @@ public class LocalFileClientReadHandler extends DataSkippableReadHandler {
             expectedLength,
             shuffleDataSegment.getStorageId(),
             retryMax,
-            retryIntervalMax);
+            retryIntervalMax,
+            taskAttemptId,
+            nextReadSegments,
+            nextReadSegmentsReportEnabled);
     try {
       long start = System.currentTimeMillis();
       RssGetShuffleDataResponse response = shuffleServerClient.getShuffleData(request);
