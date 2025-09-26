@@ -23,6 +23,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import org.slf4j.Logger;
@@ -40,9 +42,12 @@ public class PartitionedShuffleBlockIdManager implements ShuffleBlockIdManager {
 
   // appId -> shuffleId -> partitionId -> blockIds
   private Map<String, Map<Integer, Map<Integer, Roaring64NavigableMap>>> partitionsToBlockIds;
+  // appId -- shuffleId_parition -- Lock
+  private final Map<String, Map<String, ReadWriteLock>> bitmapLocks;
 
   public PartitionedShuffleBlockIdManager() {
     this.partitionsToBlockIds = new ConcurrentHashMap<>();
+    this.bitmapLocks = JavaUtils.newConcurrentMap();
   }
 
   public void registerAppId(String appId) {
@@ -70,7 +75,9 @@ public class PartitionedShuffleBlockIdManager implements ShuffleBlockIdManager {
       partitions.computeIfAbsent(partitionId, k -> Roaring64NavigableMap.bitmapOf());
       Roaring64NavigableMap bitmap = partitions.get(partitionId);
       int updatedBlockCount = 0;
-      synchronized (bitmap) {
+      ReadWriteLock lock = getLockForBitmap(appId, shuffleId, partitionId);
+      lock.writeLock().lock();
+      try {
         for (long blockId : entry.getValue()) {
           if (!bitmap.contains(blockId)) {
             bitmap.addLong(blockId);
@@ -78,6 +85,8 @@ public class PartitionedShuffleBlockIdManager implements ShuffleBlockIdManager {
             totalUpdatedBlockCount++;
           }
         }
+      } finally {
+        lock.writeLock().unlock();
       }
       taskInfo.incBlockNumber(shuffleId, partitionId, updatedBlockCount);
     }
@@ -105,8 +114,14 @@ public class PartitionedShuffleBlockIdManager implements ShuffleBlockIdManager {
     Roaring64NavigableMap res = Roaring64NavigableMap.bitmapOf();
     for (int partitionId : partitions) {
       expectedBlockNumber += taskInfo.getBlockNumber(shuffleId, partitionId);
-      Roaring64NavigableMap bitmap = partitionToBlockId.get(partitionId);
-      res.or(bitmap);
+      ReadWriteLock lockForBitmap = getLockForBitmap(appId, shuffleId, partitionId);
+      lockForBitmap.readLock().lock();
+      try {
+        Roaring64NavigableMap bitmap = partitionToBlockId.get(partitionId);
+        res.or(bitmap);
+      } finally {
+        lockForBitmap.readLock().unlock();
+      }
     }
 
     if (res.getLongCardinality() != expectedBlockNumber) {
@@ -123,8 +138,9 @@ public class PartitionedShuffleBlockIdManager implements ShuffleBlockIdManager {
   }
 
   @Override
-  public void removeBlockIdByAppId(String appId) {
+  public void remove(String appId) {
     partitionsToBlockIds.remove(appId);
+    bitmapLocks.remove(appId);
   }
 
   @Override
@@ -166,5 +182,12 @@ public class PartitionedShuffleBlockIdManager implements ShuffleBlockIdManager {
   @Override
   public long getBitmapNum(String appId, int shuffleId) {
     return partitionsToBlockIds.get(appId).get(shuffleId).size();
+  }
+
+  private ReadWriteLock getLockForBitmap(String appId, int shuffleId, int partititionId) {
+    Map<String, ReadWriteLock> innerMap =
+        bitmapLocks.computeIfAbsent(appId, k -> JavaUtils.newConcurrentMap());
+    String key = shuffleId + "_" + partititionId;
+    return innerMap.computeIfAbsent(key, k -> new ReentrantReadWriteLock());
   }
 }

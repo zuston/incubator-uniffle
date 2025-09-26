@@ -46,7 +46,12 @@ public interface ShuffleBlockIdManager {
 
   void removeBlockIdByShuffleId(String appId, List<Integer> shuffleIds);
 
-  void removeBlockIdByAppId(String appId);
+  /**
+   * Clear the objects during the operation of the APP.
+   *
+   * @param appId
+   */
+  void remove(String appId);
 
   long getTotalBlockCount();
 
