@@ -53,7 +53,9 @@ import org.apache.uniffle.common.util.ChecksumUtils;
 import org.apache.uniffle.common.util.IdHelper;
 import org.apache.uniffle.common.util.RssUtils;
 import org.apache.uniffle.storage.factory.ShuffleHandlerFactory;
+import org.apache.uniffle.storage.handler.ClientReadHandlerMetric;
 import org.apache.uniffle.storage.handler.api.ClientReadHandler;
+import org.apache.uniffle.storage.handler.impl.AbstractClientReadHandler;
 import org.apache.uniffle.storage.handler.impl.ShuffleServerReadCostTracker;
 import org.apache.uniffle.storage.request.CreateShuffleReadHandlerRequest;
 
@@ -406,7 +408,19 @@ public class ShuffleReadClientImpl implements ShuffleReadClient {
     if (decompressionWorker != null) {
       backgroundDecompressionTime = decompressionWorker.decompressionMillis();
     }
+
+    long backgroundFetchTime = 0;
+    if (clientReadHandler instanceof AbstractClientReadHandler) {
+      ClientReadHandlerMetric metric =
+          ((AbstractClientReadHandler) clientReadHandler).getReadHandlerMetric();
+      backgroundFetchTime += metric.getPrefetchTime();
+    }
+
     return new ShuffleReadTimes(
-        readDataTime.get(), copyTime.get(), crcCheckTime.get(), backgroundDecompressionTime);
+        readDataTime.get(),
+        copyTime.get(),
+        crcCheckTime.get(),
+        backgroundDecompressionTime,
+        backgroundFetchTime);
   }
 }

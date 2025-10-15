@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.uniffle.common.ShuffleDataResult;
 import org.apache.uniffle.common.exception.RssException;
+import org.apache.uniffle.storage.handler.ClientReadHandlerMetric;
 
 public abstract class PrefetchableClientReadHandler extends AbstractClientReadHandler {
   private static final Logger LOG = LoggerFactory.getLogger(PrefetchableClientReadHandler.class);
@@ -144,13 +145,27 @@ public abstract class PrefetchableClientReadHandler extends AbstractClientReadHa
     }
   }
 
+  private long getBackgroundFetchTime() {
+    long fetch = 0;
+    if (fetchTime != null) {
+      fetch = fetchTime.get();
+    }
+    return fetch;
+  }
+
   @Override
   public void logConsumedBlockInfo() {
     LOG.info(
         "Metrics for shuffleId[{}], partitionId[{}], background fetch cost {} ms",
         shuffleId,
         partitionId,
-        fetchTime);
+        getBackgroundFetchTime());
     super.logConsumedBlockInfo();
+  }
+
+  @Override
+  public ClientReadHandlerMetric getReadHandlerMetric() {
+    readHandlerMetric.setPrefetchTime(getBackgroundFetchTime());
+    return readHandlerMetric;
   }
 }
