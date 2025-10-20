@@ -606,6 +606,7 @@ message ReportShuffleWriteMetricRequest {
   bool isTaskWriteFailed = 6;
   string shuffleWriteFailureReason = 7;
   int64 uncompressedByteSize = 8;
+  int64 taskAttemptNumber = 9;
 }
 
 message ShuffleWriteTimes {
@@ -654,6 +655,7 @@ message ReportShuffleReadMetricRequest {
   bool isTaskReadFailed = 5;
   string shuffleReadFailureReason = 6;
   ShuffleReadTimes shuffleReadTimes = 7;
+  int64 taskAttemptNumber = 8;
 }
 
 message ShuffleReadTimes {
