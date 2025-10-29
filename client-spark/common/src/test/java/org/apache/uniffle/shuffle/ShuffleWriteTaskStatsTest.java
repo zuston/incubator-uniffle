@@ -15,28 +15,26 @@
  * limitations under the License.
  */
 
-package org.apache.spark.shuffle;
+package org.apache.uniffle.shuffle;
 
-import org.apache.spark.package$;
-import org.apache.spark.util.VersionUtils;
+import org.junit.jupiter.api.Test;
 
-public class Spark3VersionUtils extends SparkVersionUtils {
-  public static final String SPARK_VERSION_SHORT = package$.MODULE$.SPARK_VERSION_SHORT();
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-  public static boolean isSpark320() {
-    return SPARK_VERSION_SHORT.equals("3.2.0");
-  }
+public class ShuffleWriteTaskStatsTest {
 
-  public static boolean isSparkVersionAtLeast(String target) {
-    int targetMajor = VersionUtils.majorVersion(target);
-    int targetMinor = VersionUtils.minorVersion(target);
+  @Test
+  public void testValidValidationInfo() {
+    long taskAttemptId = 12345L;
+    ShuffleWriteTaskStats stats = new ShuffleWriteTaskStats(2, taskAttemptId);
+    stats.incPartitionRecord(0);
+    stats.incPartitionRecord(1);
 
-    if (MAJOR_VERSION > targetMajor) {
-      return true;
-    } else if (MAJOR_VERSION == targetMajor) {
-      return MINOR_VERSION >= targetMinor;
-    } else {
-      return false;
-    }
+    String encoded = stats.encode();
+    ShuffleWriteTaskStats decoded = ShuffleWriteTaskStats.decode(encoded);
+
+    assertEquals(taskAttemptId, decoded.getTaskAttemptId());
+    assertEquals(1, decoded.getRecordsWritten(0));
+    assertEquals(1, decoded.getRecordsWritten(1));
   }
 }

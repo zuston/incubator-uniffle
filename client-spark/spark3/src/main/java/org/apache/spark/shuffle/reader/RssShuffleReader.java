@@ -110,6 +110,49 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
 
   private ShuffleReadTimes shuffleReadTimes = new ShuffleReadTimes();
 
+  private long expectedRecordsRead = 0L;
+  private long actualRecordsRead = 0L;
+
+  public RssShuffleReader(
+      int startPartition,
+      int endPartition,
+      int mapStartIndex,
+      int mapEndIndex,
+      TaskContext context,
+      RssShuffleHandle<K, ?, C> rssShuffleHandle,
+      String basePath,
+      Configuration hadoopConf,
+      int partitionNum,
+      Map<Integer, Roaring64NavigableMap> partitionToExpectBlocks,
+      Roaring64NavigableMap taskIdBitmap,
+      ShuffleReadMetrics readMetrics,
+      Supplier<ShuffleManagerClient> managerClientSupplier,
+      RssConf rssConf,
+      ShuffleDataDistributionType dataDistributionType,
+      Map<Integer, List<ShuffleServerInfo>> allPartitionToServers,
+      RssShuffleManager shuffleManager,
+      long expectedRecordsRead) {
+    this(
+        startPartition,
+        endPartition,
+        mapStartIndex,
+        mapEndIndex,
+        context,
+        rssShuffleHandle,
+        basePath,
+        hadoopConf,
+        partitionNum,
+        partitionToExpectBlocks,
+        taskIdBitmap,
+        readMetrics,
+        managerClientSupplier,
+        rssConf,
+        dataDistributionType,
+        allPartitionToServers,
+        shuffleManager);
+    this.expectedRecordsRead = expectedRecordsRead;
+  }
+
   public RssShuffleReader(
       int startPartition,
       int endPartition,
@@ -252,7 +295,9 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
         + mapStartIndex
         + ", "
         + mapEndIndex
-        + ")";
+        + "]"
+        + ", expected records: "
+        + expectedRecordsRead;
   }
 
   @VisibleForTesting
@@ -370,6 +415,7 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
         }
         while (!dataIterator.hasNext()) {
           if (!iterator.hasNext()) {
+            validate();
             postShuffleReadMetricsToDriver();
             return false;
           }
@@ -391,7 +437,20 @@ public class RssShuffleReader<K, C> implements ShuffleReader<K, C> {
     @Override
     public Product2<K, C> next() {
       Product2<K, C> result = dataIterator.next();
+      actualRecordsRead += 1;
       return result;
+    }
+  }
+
+  private void validate() {
+    if (RssShuffleManager.isIntegrityValidationEnabled(rssConf)
+        && expectedRecordsRead > 0
+        && (expectedRecordsRead != actualRecordsRead)) {
+      throw new RssException(
+          "Unexpected read records. expected: "
+              + expectedRecordsRead
+              + ", actual: "
+              + actualRecordsRead);
     }
   }
 

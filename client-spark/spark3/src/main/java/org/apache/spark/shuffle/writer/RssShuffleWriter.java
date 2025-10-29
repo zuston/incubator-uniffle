@@ -87,6 +87,7 @@ import org.apache.uniffle.common.exception.RssException;
 import org.apache.uniffle.common.exception.RssSendFailedException;
 import org.apache.uniffle.common.exception.RssWaitFailedException;
 import org.apache.uniffle.common.rpc.StatusCode;
+import org.apache.uniffle.shuffle.ShuffleWriteTaskStats;
 import org.apache.uniffle.storage.util.StorageType;
 
 import static org.apache.spark.shuffle.RssSparkConfig.RSS_CLIENT_MAP_SIDE_COMBINE_ENABLED;
@@ -149,6 +150,8 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
 
   private boolean isShuffleWriteFailed = false;
   private Optional<String> shuffleWriteFailureReason = Optional.empty();
+
+  private Optional<ShuffleWriteTaskStats> shuffleTaskStats = Optional.empty();
 
   // Only for tests
   @VisibleForTesting
@@ -237,6 +240,11 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
     this.enableWriteFailureRetry =
         RssSparkConfig.toRssConf(sparkConf).get(RSS_RESUBMIT_STAGE_WITH_WRITE_FAILURE_ENABLED);
     this.recordReportFailedShuffleservers = Sets.newConcurrentHashSet();
+
+    if (RssShuffleManager.isIntegrityValidationEnabled(RssSparkConfig.toRssConf(sparkConf))) {
+      this.shuffleTaskStats =
+          Optional.of(new ShuffleWriteTaskStats(partitioner.numPartitions(), taskAttemptId));
+    }
   }
 
   // for gluten initialization
@@ -368,6 +376,9 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
       shuffleBlockInfos = bufferManager.addRecord(partition, record._1(), record._2());
       if (shuffleBlockInfos != null && !shuffleBlockInfos.isEmpty()) {
         processShuffleBlockInfos(shuffleBlockInfos);
+      }
+      if (shuffleTaskStats.isPresent()) {
+        shuffleTaskStats.get().incPartitionRecord(partition);
       }
     }
     final long start = System.currentTimeMillis();
@@ -930,6 +941,7 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
             bitmapSplitNum,
             reportDuration);
         shuffleWriteMetrics.incWriteTime(TimeUnit.MILLISECONDS.toNanos(reportDuration));
+
         // todo: we can replace the dummy host and port with the real shuffle server which we prefer
         // to read
         final BlockManagerId blockManagerId =
@@ -937,7 +949,10 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
                 appId + "_" + taskId,
                 DUMMY_HOST,
                 DUMMY_PORT,
-                Option.apply(Long.toString(taskAttemptId)));
+                Option.apply(
+                    shuffleTaskStats.isPresent()
+                        ? shuffleTaskStats.get().encode()
+                        : Long.toString(taskAttemptId)));
         MapStatus mapStatus =
             MapStatus.apply(blockManagerId, partitionLengthStatistic.toArray(), taskAttemptId);
         return Option.apply(mapStatus);
