@@ -343,14 +343,14 @@ public class ShuffleReadClientImpl implements ShuffleReadClient {
       sdr = null;
     }
     final ShuffleDataResult shuffleDataResult = clientReadHandler.readShuffleData();
-    if (decompressionWorker != null) {
-      decompressionWorker.add(batchIndex++, shuffleDataResult);
-      segmentIndex = 0;
-    }
     sdr = shuffleDataResult;
     readDataTime.addAndGet(System.currentTimeMillis() - start);
     if (sdr == null) {
       return 0;
+    }
+    if (decompressionWorker != null) {
+      decompressionWorker.add(batchIndex++, shuffleDataResult);
+      segmentIndex = 0;
     }
     if (readBuffer != null) {
       RssUtils.releaseByteBuffer(readBuffer);
