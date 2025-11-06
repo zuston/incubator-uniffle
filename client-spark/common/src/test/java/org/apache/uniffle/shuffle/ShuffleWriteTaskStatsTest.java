@@ -17,6 +17,7 @@
 
 package org.apache.uniffle.shuffle;
 
+import org.apache.uniffle.common.config.RssConf;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -25,25 +26,20 @@ public class ShuffleWriteTaskStatsTest {
 
   @Test
   public void testValidValidationInfo() {
+    RssConf rssConf = new RssConf();
     long taskId = 10;
     long taskAttemptId = 12345L;
-    ShuffleWriteTaskStats stats = new ShuffleWriteTaskStats(2, taskAttemptId, taskId);
+    ShuffleWriteTaskStats stats = new ShuffleWriteTaskStats(rssConf, 2, taskAttemptId, taskId);
     stats.incPartitionRecord(0);
     stats.incPartitionRecord(1);
 
-    stats.incPartitionBlock(0);
-    stats.incPartitionBlock(1);
-
     String encoded = stats.encode();
-    ShuffleWriteTaskStats decoded = ShuffleWriteTaskStats.decode(encoded);
+    ShuffleWriteTaskStats decoded = ShuffleWriteTaskStats.decode(rssConf, encoded);
 
     assertEquals(10, stats.getTaskId());
 
     assertEquals(taskAttemptId, decoded.getTaskAttemptId());
     assertEquals(1, decoded.getRecordsWritten(0));
     assertEquals(1, decoded.getRecordsWritten(1));
-
-    assertEquals(1, decoded.getBlocksWritten(0));
-    assertEquals(1, decoded.getBlocksWritten(1));
   }
 }

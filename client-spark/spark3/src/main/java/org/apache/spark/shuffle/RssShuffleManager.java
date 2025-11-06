@@ -576,7 +576,7 @@ public class RssShuffleManager extends RssShuffleManagerBase {
     while (iter.hasNext()) {
       BlockManagerId blockManagerId = iter.next();
       ShuffleWriteTaskStats shuffleWriteTaskStats =
-          ShuffleWriteTaskStats.decode(blockManagerId.topologyInfo().get());
+          ShuffleWriteTaskStats.decode(rssConf, blockManagerId.topologyInfo().get());
       upstreamStats.put(shuffleWriteTaskStats.getTaskAttemptId(), shuffleWriteTaskStats);
     }
     return upstreamStats;
@@ -597,7 +597,7 @@ public class RssShuffleManager extends RssShuffleManagerBase {
 
       String raw = blockManagerId.topologyInfo().get();
       if (isIntegrityValidationEnabled(rssConf)) {
-        ShuffleWriteTaskStats shuffleWriteTaskStats = ShuffleWriteTaskStats.decode(raw);
+        ShuffleWriteTaskStats shuffleWriteTaskStats = ShuffleWriteTaskStats.decode(rssConf, raw);
         taskIdBitmap.add(shuffleWriteTaskStats.getTaskAttemptId());
         for (int i = startPartition; i < endPartition; i++) {
           expectedRecordsRead += shuffleWriteTaskStats.getRecordsWritten(i);

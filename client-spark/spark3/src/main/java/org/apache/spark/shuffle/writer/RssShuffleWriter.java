@@ -248,7 +248,7 @@ public class RssShuffleWriter<K, V, C> extends ShuffleWriter<K, V> {
       this.shuffleTaskStats =
           Optional.of(
               new ShuffleWriteTaskStats(
-                  partitioner.numPartitions(), taskAttemptId, taskContext.taskAttemptId()));
+                  rssConf, partitioner.numPartitions(), taskAttemptId, taskContext.taskAttemptId()));
     }
   }
 

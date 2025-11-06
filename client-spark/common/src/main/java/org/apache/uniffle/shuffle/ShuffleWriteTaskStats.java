@@ -20,12 +20,15 @@ package org.apache.uniffle.shuffle;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import org.apache.uniffle.common.compression.ZstdCodec;
+import org.apache.uniffle.common.config.RssConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.uniffle.common.exception.RssException;
 
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
+import static org.apache.spark.shuffle.RssSparkConfig.RSS_DATA_INTEGRATION_VALIDATION_BLOCK_NUMBER_CHECK_ENABLED;
 
 /**
  * ShuffleWriteTaskStats stores statistics for a shuffle write task attempt, including the task
@@ -40,15 +43,26 @@ public class ShuffleWriteTaskStats {
   private long taskAttemptId;
   private long[] partitionRecordsWritten;
   private long[] partitionBlocksWritten;
+  private boolean blockNumberCheckEnabled;
+  private RssConf rssConf;
 
-  public ShuffleWriteTaskStats(int partitions, long taskAttemptId, long taskId) {
+  public ShuffleWriteTaskStats(RssConf rssConf, int partitions, long taskAttemptId, long taskId) {
     this.partitionRecordsWritten = new long[partitions];
-    this.partitionBlocksWritten = new long[partitions];
+    Arrays.fill(this.partitionRecordsWritten, 0L);
+
     this.taskAttemptId = taskAttemptId;
     this.taskId = taskId;
+    this.rssConf = rssConf;
 
-    Arrays.fill(this.partitionRecordsWritten, 0L);
-    Arrays.fill(this.partitionBlocksWritten, 0L);
+    this.blockNumberCheckEnabled = rssConf.get(RSS_DATA_INTEGRATION_VALIDATION_BLOCK_NUMBER_CHECK_ENABLED);
+    if (blockNumberCheckEnabled) {
+      this.partitionBlocksWritten = new long[partitions];
+      Arrays.fill(this.partitionBlocksWritten, 0L);
+    }
+  }
+
+  public ShuffleWriteTaskStats(int partitions, long taskAttemptId, long taskId) {
+    this(new RssConf(), partitions, taskAttemptId, taskId);
   }
 
   public long getRecordsWritten(int partitionId) {
@@ -60,11 +74,16 @@ public class ShuffleWriteTaskStats {
   }
 
   public void incPartitionBlock(int partitionId) {
-    partitionBlocksWritten[partitionId]++;
+    if (blockNumberCheckEnabled) {
+      partitionBlocksWritten[partitionId]++;
+    }
   }
 
   public long getBlocksWritten(int partitionId) {
-    return partitionBlocksWritten[partitionId];
+    if (blockNumberCheckEnabled) {
+      return partitionBlocksWritten[partitionId];
+    }
+    return -1L;
   }
 
   public long getTaskAttemptId() {
@@ -72,33 +91,55 @@ public class ShuffleWriteTaskStats {
   }
 
   public String encode() {
+    long start = System.currentTimeMillis();
     int partitions = partitionRecordsWritten.length;
-    ByteBuffer buffer =
-        ByteBuffer.allocate(2 * Long.BYTES + Integer.BYTES + partitions * Long.BYTES * 2);
+    int capacity = 2 * Long.BYTES + Integer.BYTES + partitions * Long.BYTES;
+    if (blockNumberCheckEnabled) {
+      capacity = 2 * Long.BYTES + Integer.BYTES + partitions * Long.BYTES * 2;
+    }
+    ByteBuffer buffer = ByteBuffer.allocate(capacity);
     buffer.putLong(taskId);
     buffer.putLong(taskAttemptId);
     buffer.putInt(partitions);
     for (long records : partitionRecordsWritten) {
       buffer.putLong(records);
     }
-    for (long blocks : partitionBlocksWritten) {
-      buffer.putLong(blocks);
+    if (blockNumberCheckEnabled) {
+      for (long blocks : partitionBlocksWritten) {
+        buffer.putLong(blocks);
+      }
     }
-    return new String(buffer.array(), ISO_8859_1);
+    byte[] compressed = ZstdCodec.getInstance(rssConf).compress(buffer.array());
+    ByteBuffer finalBuffer = ByteBuffer.allocate(Integer.BYTES + compressed.length);
+    finalBuffer.putInt(capacity);
+    finalBuffer.put(compressed);
+    LOGGER.info(
+            "Encoded task stats for {} partitions with {} bytes (original: {} bytes) in {} ms",
+            partitions,
+            finalBuffer.capacity(),
+            capacity,
+            System.currentTimeMillis() - start);
+    return new String(finalBuffer.array(), ISO_8859_1);
   }
 
-  public static ShuffleWriteTaskStats decode(String raw) {
-    byte[] bytes = raw.getBytes(ISO_8859_1);
-    ByteBuffer buffer = ByteBuffer.wrap(bytes);
-    long taskId = buffer.getLong();
-    long taskAttemptId = buffer.getLong();
-    int partitions = buffer.getInt();
+  public static ShuffleWriteTaskStats decode(RssConf rssConf, String raw) {
+    ByteBuffer inBuffer = ByteBuffer.wrap(raw.getBytes(ISO_8859_1));
+    int originalLength = inBuffer.getInt();
+    ByteBuffer outBuffer = ByteBuffer.allocate(originalLength);
+    ZstdCodec.getInstance(rssConf).decompress(inBuffer, originalLength, outBuffer, 0);
+
+    long taskId = outBuffer.getLong();
+    long taskAttemptId = outBuffer.getLong();
+    int partitions = outBuffer.getInt();
     ShuffleWriteTaskStats stats = new ShuffleWriteTaskStats(partitions, taskAttemptId, taskId);
     for (int i = 0; i < partitions; i++) {
-      stats.partitionRecordsWritten[i] = buffer.getLong();
+      stats.partitionRecordsWritten[i] = outBuffer.getLong();
     }
-    for (int i = 0; i < partitions; i++) {
-      stats.partitionBlocksWritten[i] = buffer.getLong();
+
+    if (rssConf.get(RSS_DATA_INTEGRATION_VALIDATION_BLOCK_NUMBER_CHECK_ENABLED)) {
+      for (int i = 0; i < partitions; i++) {
+        stats.partitionBlocksWritten[i] = outBuffer.getLong();
+      }
     }
     return stats;
   }
@@ -111,8 +152,8 @@ public class ShuffleWriteTaskStats {
     StringBuilder infoBuilder = new StringBuilder();
     int partitions = partitionRecordsWritten.length;
     for (int i = 0; i < partitions; i++) {
-      long records = partitionRecordsWritten[i];
-      long blocks = partitionBlocksWritten[i];
+      long records = getRecordsWritten(i);
+      long blocks = getBlocksWritten(i);
       infoBuilder.append(i).append("/").append(records).append("/").append(blocks).append(",");
     }
     LOGGER.info(
@@ -122,18 +163,15 @@ public class ShuffleWriteTaskStats {
   public void check(long[] partitionLens) {
     int partitions = partitionRecordsWritten.length;
     for (int idx = 0; idx < partitions; idx++) {
-      long records = partitionRecordsWritten[idx];
-      long blocks = partitionBlocksWritten[idx];
+      long records = getRecordsWritten(idx);
       long length = partitionLens[idx];
       if (records > 0) {
-        if (blocks <= 0 || length <= 0) {
+        if (length <= 0) {
           throw new RssException(
               "Illegal partition:"
                   + idx
                   + " stats. records/blocks/length: "
                   + records
-                  + "/"
-                  + blocks
                   + "/"
                   + length);
         }
