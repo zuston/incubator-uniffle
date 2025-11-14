@@ -58,6 +58,14 @@ public class RssSparkConfig {
                   .defaultValue(false)
                   .withDescription("Whether or not to enable validation block checking");
 
+  public static final ConfigOption<Boolean>
+      RSS_DATA_INTEGRITY_VALIDATION_SERVER_MANAGEMENT_ENABLED =
+          ConfigOptions.key("rss.client.integrityValidation.serverManagementEnabled")
+              .booleanType()
+              .defaultValue(false)
+              .withDescription(
+                  "Whether or not to enable validation management by shuffle-server rather than client side");
+
   public static final ConfigOption<Boolean> RSS_READ_SHUFFLE_HANDLE_CACHE_ENABLED =
       ConfigOptions.key("rss.client.read.shuffleHandleCacheEnabled")
           .booleanType()
