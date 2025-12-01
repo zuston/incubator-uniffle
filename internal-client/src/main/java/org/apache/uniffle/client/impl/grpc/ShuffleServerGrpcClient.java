@@ -1115,19 +1115,21 @@ public class ShuffleServerGrpcClient extends GrpcClient implements ShuffleServer
     RssGetInMemoryShuffleDataResponse response;
     switch (rpcResponse.getStatus()) {
       case SUCCESS:
+        byte[] data = rpcResponse.getData().toByteArray();
         LOG.info(
-            "GetInMemoryShuffleData from {}:{} for "
-                + requestInfo
-                + " cost "
-                + (System.currentTimeMillis() - start)
-                + " ms",
-            host,
-            port);
+                "GetInMemoryShuffleData from {}:{} for {} cost {} ms with {} bytes",
+                host,
+                port,
+                requestInfo,
+                System.currentTimeMillis() - start,
+                data.length);
+        boolean isEnd = rpcResponse.hasIsEnd() ? rpcResponse.getIsEnd().getValue() : false;
         response =
             new RssGetInMemoryShuffleDataResponse(
                 StatusCode.SUCCESS,
-                ByteBuffer.wrap(rpcResponse.getData().toByteArray()),
-                toBufferSegments(rpcResponse.getShuffleDataBlockSegmentsList()));
+                ByteBuffer.wrap(data),
+                toBufferSegments(rpcResponse.getShuffleDataBlockSegmentsList()),
+                isEnd);
         break;
       default:
         String msg =
