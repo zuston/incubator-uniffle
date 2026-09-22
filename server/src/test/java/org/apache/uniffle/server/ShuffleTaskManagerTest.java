@@ -950,12 +950,51 @@ public class ShuffleTaskManagerTest extends HadoopTestBase {
     Roaring64NavigableMap resBlockIds = RssUtils.deserializeBitMap(serializeBitMap);
     assertEquals(expectedBlockIds, resBlockIds);
 
+    long lastActiveTime = System.currentTimeMillis() - 100;
+    shuffleTaskManager.getShuffleTaskInfo(appId).setCurrentTimes(lastActiveTime);
+    try {
+      shuffleTaskManager.getFinishedBlockIds(
+          appId, shuffleId, Sets.newHashSet(partitionNum), layout);
+      fail("NoRegisterException should be thrown");
+    } catch (NoRegisterException e) {
+      assertTrue(e.getMessage().contains("No such partition is registered"));
+    }
+    assertEquals(lastActiveTime, shuffleTaskManager.getShuffleTaskInfo(appId).getCurrentTimes());
+
     try {
       // calling with same appId and shuffleId but different bitmapNum should fail
       shuffleTaskManager.addFinishedBlockIds(appId, shuffleId, blockIdsToReport, bitNum - 1);
       fail("Exception should be thrown");
     } catch (InvalidRequestException e) {
       assertEquals(e.getMessage(), "Request expects 2 bitmaps, but there are 3 bitmaps!");
+    }
+
+    shuffleTaskManager.removeResources(appId, false);
+    try {
+      shuffleTaskManager.getFinishedBlockIds(appId, shuffleId, requestPartitions, layout);
+      fail("NoRegisterException should be thrown");
+    } catch (NoRegisterException e) {
+      assertTrue(e.getMessage().contains("No such app is registered"));
+    }
+    assertNull(shuffleTaskManager.getShuffleTaskInfo(appId));
+
+    int newShuffleId = shuffleId + 1;
+    shuffleTaskManager.registerShuffle(
+        appId,
+        newShuffleId,
+        Lists.newArrayList(new PartitionRange(startPartition, endPartition)),
+        new RemoteStorageInfo(storageBasePath),
+        StringUtils.EMPTY);
+    assertTrue(
+        RssUtils.deserializeBitMap(
+                shuffleTaskManager.getFinishedBlockIds(
+                    appId, newShuffleId, requestPartitions, layout))
+            .isEmpty());
+    try {
+      shuffleTaskManager.getFinishedBlockIds(appId, shuffleId, requestPartitions, layout);
+      fail("NoRegisterException should be thrown");
+    } catch (NoRegisterException e) {
+      assertTrue(e.getMessage().contains("No such shuffle is registered"));
     }
   }
 
