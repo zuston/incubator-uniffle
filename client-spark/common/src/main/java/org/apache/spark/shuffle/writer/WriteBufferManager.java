@@ -687,15 +687,21 @@ public class WriteBufferManager extends MemoryConsumer {
     return blockCounter.get();
   }
 
-  public void freeAllocatedMemory(long freeMemory) {
+  public synchronized void freeAllocatedMemory(long freeMemory) {
+    // Completion callbacks may arrive after freeAllMemory has released the task's memory.
+    if (allocatedBytes.get() == 0) {
+      return;
+    }
     freeMemory(freeMemory);
     allocatedBytes.addAndGet(-freeMemory);
     usedBytes.addAndGet(-freeMemory);
     inSendListBytes.addAndGet(-freeMemory);
   }
 
-  public void freeAllMemory() {
-    long memory = allocatedBytes.get();
+  public synchronized void freeAllMemory() {
+    long memory = allocatedBytes.getAndSet(0);
+    usedBytes.set(0);
+    inSendListBytes.set(0);
     if (memory > 0) {
       freeMemory(memory);
     }
