@@ -208,8 +208,7 @@ public class WriteBufferManagerTest {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void freeAllMemoryWithPendingCallbacksTest(boolean cleanupFirst)
-      throws IllegalAccessException {
+  public void freeAllMemoryWithPendingCallbacksTest(boolean cleanupFirst) {
     SparkConf conf = getConf();
     TaskMemoryManager taskMemoryManager = mock(TaskMemoryManager.class);
     WriteBufferManager wbm = createManager(conf, taskMemoryManager);
@@ -221,7 +220,7 @@ public class WriteBufferManagerTest {
     wbm.buildBlockEvents(blocks);
     wbm.addRecord(2, "Key", "Value");
     assertEquals(512, wbm.getAllocatedBytes());
-    assertEquals(512L, FieldUtils.readField(wbm, "used", true));
+    assertEquals(512, wbm.getUsed());
     assertEquals(96, wbm.getUsedBytes());
     assertEquals(64, wbm.getInSendListBytes());
     blocks.forEach(block -> assertEquals(1, block.getData().refCnt()));
@@ -241,7 +240,7 @@ public class WriteBufferManagerTest {
     wbm.freeAllMemory();
 
     assertEquals(0, wbm.getAllocatedBytes());
-    assertEquals(0L, FieldUtils.readField(wbm, "used", true));
+    assertEquals(0, wbm.getUsed());
     assertEquals(0, wbm.getUsedBytes());
     assertEquals(0, wbm.getInSendListBytes());
     blocks.forEach(block -> assertEquals(0, block.getData().refCnt()));
@@ -285,7 +284,7 @@ public class WriteBufferManagerTest {
     CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get(10, TimeUnit.SECONDS);
 
     assertEquals(0, wbm.getAllocatedBytes());
-    assertEquals(0L, FieldUtils.readField(wbm, "used", true));
+    assertEquals(0, wbm.getUsed());
     assertEquals(0, wbm.getUsedBytes());
     assertEquals(0, wbm.getInSendListBytes());
     blocks.forEach(block -> assertEquals(0, block.getData().refCnt()));

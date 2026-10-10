@@ -659,6 +659,12 @@ public class WriteBufferManager extends MemoryConsumer {
     }
   }
 
+  // Spark 2 declares MemoryConsumer.getUsed() as protected.
+  @Override
+  public long getUsed() {
+    return super.getUsed();
+  }
+
   @VisibleForTesting
   protected long getAllocatedBytes() {
     return allocatedBytes.get();
