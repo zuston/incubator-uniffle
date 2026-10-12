@@ -29,7 +29,9 @@ import com.google.common.collect.Maps;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.shuffle.RssShuffleManager;
 import org.apache.spark.shuffle.RssSparkConfig;
+import org.apache.spark.shuffle.Spark3VersionUtils;
 import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -42,8 +44,11 @@ import org.apache.uniffle.test.listener.WriteAndReadMetricsSparkListener;
 
 import static org.apache.spark.shuffle.RssSparkConfig.toSparkConfKey;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class MapSideCombineTest extends SparkIntegrationTestBase {
+  private boolean serverManagementEnabled;
 
   @BeforeAll
   public static void setupServers() throws Exception {
@@ -62,6 +67,10 @@ public class MapSideCombineTest extends SparkIntegrationTestBase {
     sparkConf.set(toSparkConfKey(RssClientConf.RSS_REMOTE_STORAGE_PATH), HDFS_URI + "rss/test");
     sparkConf.set("spark." + RssSparkConfig.RSS_CLIENT_MAP_SIDE_COMBINE_ENABLED.key(), "true");
     sparkConf.set("spark." + RssSparkConfig.RSS_CLIENT_INTEGRITY_VALIDATION_ENABLED.key(), "true");
+    // todo: we'd better to introduce the dedicated test cases for the integrity validation mechanism
+    sparkConf.set(
+        toSparkConfKey(RssSparkConfig.RSS_DATA_INTEGRITY_VALIDATION_SERVER_MANAGEMENT_ENABLED),
+        Boolean.toString(serverManagementEnabled));
   }
 
   @Test
@@ -69,9 +78,23 @@ public class MapSideCombineTest extends SparkIntegrationTestBase {
     run();
   }
 
+  @Test
+  public void serverManagementTest() throws Exception {
+    assumeTrue(Spark3VersionUtils.isSparkVersionAtLeast("3.5.0"));
+    serverManagementEnabled = true;
+    run();
+  }
+
   @Override
   Map runTest(SparkSession spark, String fileName) throws Exception {
     Thread.sleep(4000);
+
+    if (serverManagementEnabled
+        && spark.sparkContext().env().shuffleManager() instanceof RssShuffleManager) {
+      assertTrue(
+          RssShuffleManager.isIntegrityValidationServerManagementEnabled(
+              RssSparkConfig.toRssConf(spark.sparkContext().getConf())));
+    }
 
     WriteAndReadMetricsSparkListener listener = new WriteAndReadMetricsSparkListener();
     spark.sparkContext().addSparkListener(listener);

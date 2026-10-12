@@ -26,7 +26,7 @@ import java.util.Set;
 import org.apache.uniffle.common.util.JavaUtils;
 import org.apache.uniffle.proto.RssProtos;
 
-/** Stores partition record counts for one application for the integrity-validation mechanism */
+/** Stores partition record counts for one application. */
 public class PartitionStatsManager {
   /** shuffleId -> partitionId -> taskAttemptId -> record number */
   private final Map<Integer, Map<Integer, Map<Long, Long>>> partitionStats =
