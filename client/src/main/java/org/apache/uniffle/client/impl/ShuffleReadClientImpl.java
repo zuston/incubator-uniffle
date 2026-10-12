@@ -383,6 +383,7 @@ public class ShuffleReadClientImpl implements ShuffleReadClient {
     if (sdr == null) {
       return 0;
     }
+    // Convert once: a composite buffer may need a full copy to produce a contiguous ByteBuffer.
     readBuffer = sdr.getDataBuffer();
     if (readBuffer == null || readBuffer.capacity() == 0) {
       return 0;
@@ -405,8 +406,7 @@ public class ShuffleReadClientImpl implements ShuffleReadClient {
     }
     // push the valid segments into the overlapping decompression queue
     if (decompressionWorker != null) {
-      decompressionWorker.add(
-          batchIndex++, new ShuffleDataResult(sdr.getManagedBuffer(), segments));
+      decompressionWorker.add(batchIndex++, segments, readBuffer);
       segmentIndex = 0;
     }
     bufferSegmentQueue.addAll(segments);

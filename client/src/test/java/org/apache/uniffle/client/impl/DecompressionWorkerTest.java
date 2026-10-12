@@ -52,7 +52,7 @@ public class DecompressionWorkerTest {
         new DecompressionWorker(codec, threads, fetchSecondsThreshold, maxSegments);
 
     ShuffleDataResult shuffleDataResult = createShuffleDataResult(maxSegments + 1, codec, 1024);
-    worker.add(0, shuffleDataResult);
+    worker.add(0, shuffleDataResult.getBufferSegments(), shuffleDataResult.getDataBuffer());
 
     // case1: check the peek memory used is correct when the decompression is in progress
     Awaitility.await()
@@ -119,7 +119,7 @@ public class DecompressionWorkerTest {
 
     // create some data
     ShuffleDataResult shuffleDataResult = createShuffleDataResult(10, codec, 100);
-    worker.add(0, shuffleDataResult);
+    worker.add(0, shuffleDataResult.getBufferSegments(), shuffleDataResult.getDataBuffer());
 
     DecompressedShuffleBlock block1 = worker.get(0, 1);
     assertEquals(100, block1.getByteBuffer().remaining());

@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.uniffle.client.response.DecompressedShuffleBlock;
 import org.apache.uniffle.common.BufferSegment;
-import org.apache.uniffle.common.ShuffleDataResult;
 import org.apache.uniffle.common.compression.Codec;
 import org.apache.uniffle.common.util.JavaUtils;
 import org.apache.uniffle.common.util.RssUtils;
@@ -105,9 +104,7 @@ public class DecompressionWorker {
     return executorService;
   }
 
-  public void add(int batchIndex, ShuffleDataResult shuffleDataResult) {
-    List<BufferSegment> bufferSegments = shuffleDataResult.getBufferSegments();
-    ByteBuffer sharedByteBuffer = shuffleDataResult.getDataBuffer();
+  public void add(int batchIndex, List<BufferSegment> bufferSegments, ByteBuffer sharedByteBuffer) {
     int index = 0;
     LOG.debug(
         "Adding {} segments with batch index:{} to decompression worker",
