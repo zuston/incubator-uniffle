@@ -225,6 +225,9 @@ public class ShuffleServerGrpcTest extends IntegrationTestBase {
                 new RssGetShuffleResultForMultiPartRequest(appId, 1, Sets.newHashSet(1), layout))
             .getPartitionToTaskAttemptIdToRecordNumbers());
 
+    Map<Integer, Long> invalidRecordNumbers = Maps.newLinkedHashMap();
+    invalidRecordNumbers.put(1, 40L);
+    invalidRecordNumbers.put(2, -1L);
     RssException invalidRecords =
         assertThrows(
             RssException.class,
@@ -236,8 +239,34 @@ public class ShuffleServerGrpcTest extends IntegrationTestBase {
                         4L,
                         Collections.singletonMap(1, Lists.newArrayList(layout.getBlockId(0, 1, 4))),
                         1,
-                        Collections.singletonMap(1, -1L))));
+                        invalidRecordNumbers)));
     assertTrue(invalidRecords.getMessage().contains("record number must be nonnegative"));
+    RssException invalidTask =
+        assertThrows(
+            RssException.class,
+            () ->
+                client.reportShuffleResult(
+                    new RssReportShuffleResultRequest(
+                        appId,
+                        0,
+                        -1L,
+                        Collections.emptyMap(),
+                        1,
+                        Collections.singletonMap(1, 40L))));
+    assertTrue(invalidTask.getMessage().contains("Task attempt ID"));
+    RssException invalidBitmap =
+        assertThrows(
+            RssException.class,
+            () ->
+                client.reportShuffleResult(
+                    new RssReportShuffleResultRequest(
+                        appId,
+                        0,
+                        4L,
+                        Collections.singletonMap(1, Lists.newArrayList(layout.getBlockId(0, 1, 4))),
+                        2,
+                        Collections.singletonMap(1, 40L))));
+    assertTrue(invalidBitmap.getMessage().contains("Request expects 2 bitmaps"));
     assertEquals(
         result.getBlockIdBitmap(), client.getShuffleResultForMultiPart(get).getBlockIdBitmap());
     assertEquals(

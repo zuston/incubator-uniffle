@@ -462,6 +462,19 @@ public class ShuffleTaskManager {
     Lock readLock = getAppReadLock(appId);
     readLock.lock();
     try {
+      for (RssProtos.PartitionStats partition : partitionStats) {
+        if (shuffleBufferManager.getShuffleBufferEntry(appId, shuffleId, partition.getPartitionId())
+            == null) {
+          throw new InvalidRequestException(
+              "Partition stats refer to an unregistered partition: " + partition.getPartitionId());
+        }
+        for (RssProtos.TaskAttemptIdToRecords record : partition.getTaskAttemptIdToRecordsList()) {
+          if (record.getTaskAttemptId() < 0 || record.getRecordNumber() < 0) {
+            throw new InvalidRequestException(
+                "Task attempt ID and record number must be nonnegative");
+          }
+        }
+      }
       refreshAppId(appId);
       ShuffleTaskInfo taskInfo = getShuffleTaskInfo(appId);
       if (taskInfo == null) {
@@ -469,13 +482,13 @@ public class ShuffleTaskManager {
             "ShuffleTaskInfo is not found that should not happen for appId: " + appId);
       }
       Supplier throwFunc = () -> new RssException("appId[" + appId + "] is expired!");
-      Optional.ofNullable(taskInfo.getPartitionStatsManager())
-          .orElseThrow(throwFunc)
-          .add(shuffleId, partitionStats);
       int updatedBlockCount =
           Optional.ofNullable(taskInfo.getShuffleBlockIdManager())
               .orElseThrow(throwFunc)
               .addFinishedBlockIds(taskInfo, appId, shuffleId, partitionToBlockIds, bitmapNum);
+      Optional.ofNullable(taskInfo.getPartitionStatsManager())
+          .orElseThrow(throwFunc)
+          .add(shuffleId, partitionStats);
       return updatedBlockCount;
     } finally {
       readLock.unlock();
